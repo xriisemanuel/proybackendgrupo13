@@ -1,9 +1,12 @@
 const mongoose = require('mongoose');
-const {Schema} = mongoose;
+const { Schema } = mongoose;
+const Rol = require('../models/rol'); // Asegúrate de que la ruta sea correcta IMPORTANTE
+
 const usuarioSchema = new Schema({
     usuario: {
         type: String,
-        required: true
+        required: true,
+        unique: true  // Opcional, pero recomendable para evitar duplicados
     },
     password: {
         type: String,
@@ -19,8 +22,16 @@ const usuarioSchema = new Schema({
     },
     email: {
         type: String,
-        required: true
+        required: true,
+        unique: true  // También recomendable
     },
-})
-module.exports = mongoose.model.usuario || mongoose.model('Usuario', usuarioSchema);
-// Este modelo define la estructura de los documentos de usuario en la base de datos MongoDB.
+    rol: {
+        type: Schema.Types.ObjectId,
+        ref: Rol,     // Debe coincidir con el nombre del modelo exportado en rol.js
+        required: true
+    }
+    //responsable: {type: Schema.Types.ObjectId, ref: Agente, required: true} 
+});
+
+// Exporta correctamente el modelo (previene redefiniciones en desarrollo)
+module.exports = mongoose.models.Usuario || mongoose.model('Usuario', usuarioSchema);

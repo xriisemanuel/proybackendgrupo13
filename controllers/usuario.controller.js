@@ -36,6 +36,20 @@ usuarioController.obtenerUsuarioPorId = async (req, res) => {
     }
 };
 
+// 3. Listar Usuarios por Rol
+usuarioController.listarUsuariosPorRol = async (req, res) => {
+    try {
+        const rolId = req.params.rolId; //{/123 -> '123'}
+        const usuarios = await Usuario.find({ rol: rolId }).populate('rol');
+        if (usuarios.length === 0) {
+            return res.status(404).json({ mensaje: 'No se encontraron usuarios para este rol' });
+        }
+        res.status(200).json(usuarios);
+    } catch (error) {
+        res.status(500).json({ mensaje: 'Error al listar usuarios por rol', error: error.message });
+    }
+}
+
 // 4. Actualizar Usuario
 usuarioController.actualizarUsuario = async (req, res) => {
     try {

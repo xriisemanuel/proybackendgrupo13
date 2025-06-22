@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const {Schema} = mongoose;
+
 const rolSchema = new Schema({
     nombre: {
         type: String,
@@ -11,5 +12,5 @@ const rolSchema = new Schema({
     },
 })
 
-module.exports = mongoose.model.rol || mongoose.model('Rol', rolSchema);
+module.exports = mongoose.model.Rol || mongoose.model('Rol', rolSchema);
 // Este modelo define la estructura de los documentos de rol en la base de datos MongoDB.

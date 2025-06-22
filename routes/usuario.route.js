@@ -10,6 +10,8 @@ router.delete('/eliminar/:id', usuarioController.eliminarUsuario);
 router.post('/login', usuarioController.loginUsuario);
 router.post('/cambiar-password', usuarioController.cambiarPassword);
 router.post('/recuperar-password', usuarioController.recuperarPassword);
+//listar usuarios por rol
+router.get('/listar-por-rol/:rolId', usuarioController.listarUsuariosPorRol);
 // router.post('/verificar-token', usuarioController.verificarToken);
 router.post('/enviar-email', usuarioController.enviarEmail);
 
