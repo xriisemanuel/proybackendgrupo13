@@ -25,7 +25,7 @@ const usuarioSchema = new Schema({
         required: true,
         unique: true  // También recomendable
     },
-    rol: {
+    rol: { //relacion muchos la recibe en esta clase
         type: Schema.Types.ObjectId,
         ref: Rol,     // Debe coincidir con el nombre del modelo exportado en rol.js
         required: true
