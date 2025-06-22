@@ -1,15 +1,27 @@
 {
+<<<<<<< HEAD
   "name": "branch-cris-nil",
   "version": "1.0.0",
   "description": "",
   "license": "ISC",
   "author": "",
   "type": "commonjs",
+=======
+  "name": "proybackendgrupo13",
+  "version": "1.0.0",
+  "description": "",
+>>>>>>> d43ba665b049d1723bbd0e2c50f04c1be4528bd3
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon index.js"
+<<<<<<< HEAD
   },
+=======
+    },
+  "author": "",
+  "license": "ISC",
+>>>>>>> d43ba665b049d1723bbd0e2c50f04c1be4528bd3
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
