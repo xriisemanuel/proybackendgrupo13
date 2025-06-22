@@ -2,6 +2,14 @@
   "name": "branch-cris-nil",
   "version": "1.0.0",
   "description": "",
+  "homepage": "https://github.com/xriisemanuel/proybackendgrupo13#readme",
+  "bugs": {
+    "url": "https://github.com/xriisemanuel/proybackendgrupo13/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xriisemanuel/proybackendgrupo13.git"
+  },
   "license": "ISC",
   "author": "",
   "type": "commonjs",
