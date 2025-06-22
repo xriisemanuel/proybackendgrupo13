@@ -6,6 +6,9 @@ var app = express();
 app.use(express.json());
 app.use(cors({origin: 'http://localhost:4200'}));
 //Cargamos el modulo de direccionamiento de rutas
+app.use('/api/producto', require('./routes/producto.route.js'));
+app.use('/api/pedido', require('./routes/pedido.route'));
+app.use('/api/detalle-producto', require('./routes/detalleProducto.route'));
 //app.use('/api/agente', require('./routes/agente.route.js'));
 //app.use('/api/sector', require('./routes/sector.route'));
 //setting
