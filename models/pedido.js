@@ -1,89 +1,141 @@
 const mongoose = require('mongoose');
-const { Schema } = mongoose;
-// const Rol = require('../models/rol'); // Si 'Cliente' es un modelo separado, no necesitas Rol aquí.
-//const Cliente = require('./cliente'); // Asumo que ya tienes un modelo Cliente
-//const Producto = require('./producto'); // Necesario para los items del pedido
-const Rol = require('../models/rol'); // Si 'Cliente' es un rol, puedes usar Rol directamente
-const PedidoSchema = new Schema({
-    // --- Atributos Esenciales ---
+const Schema = mongoose.Schema;
 
-    // 1. Cliente que realiza el pedido
-    cliente: {
-        type: Schema.Types.ObjectId,
-        ref: 'Rol', // Referencia al modelo Rol (asumiendo que así se llama tu modelo de usuarios/clientes)
-        required: true
-    },
-
-    // 2. Fecha de creación del pedido
-    fechaCreacion: {
-        type: Date,
-        default: Date.now, // Se establece automáticamente al crear el pedido
-        required: true
-    },
-
-    // 3. Estado actual del pedido
-    estado: {
-        type: String,
-        required: true,
-        enum: [
-            'Pendiente',        // Pedido creado, esperando acción (ej. pago, confirmación)
-            'En Proceso',       // Pedido en preparación o siendo gestionado
-            'Completado',       // Pedido entregado/finalizado
-            'Cancelado'         // Pedido anulado
-        ],
-        default: 'Pendiente' // Estado inicial
-    },
-
-    // 4. Detalle de los productos/ítems incluidos en el pedido
-    // Usamos un array de objetos embebidos para la simplicidad y el rendimiento en un esquema básico.
-    items: [{
-        producto: { // Referencia al producto específico
-            type: Schema.Types.ObjectId,
-            ref: 'Producto', // Tu modelo de Producto
-            required: true
-        },
-        cantidad: {
-            type: Number,
-            required: true,
-            min: 1 // Asegura que la cantidad sea al menos 1
-        },
-        precioUnitario: { // Precio del producto en el momento de la compra
-            type: Number,
-            required: true
-        }
-    }],
-
-    // 5. Total del pedido
-    total: {
-        type: Number,
-        required: true,
-        min: 0 // El total no puede ser negativo
-    },
-
-    // 6. Forma de pago utilizada
-    formaDePago: {
-        type: String,
-        required: true,
-        // Puedes usar un enum si solo aceptas pocas formas de pago
-        // enum: ['Efectivo', 'Tarjeta de Crédito', 'Mercado Pago']
-    },
-
-    // 7. Modalidad de entrega/retiro
-    modalidad: {
-        type: String,
-        required: true,
-        enum: ['Delivery', 'Retiro en local']
-    },
-    
-    // Si la modalidad es 'Delivery', necesitas una dirección.
-    // Esto podría ser un subdocumento embebido simple o una referencia a una Dirección si es un objeto complejo.
-    // Por simplicidad, lo ponemos aquí directo como texto o campos básicos.
-    // **Opcional, solo si la modalidad 'Delivery' es frecuente:**
-    direccionEnvio: { // Objeto con campos de dirección (simple)
-        calle: { type: String },
-        numero: { type: String },
-        localidad: { type: String }
-    }
+// --- Esquema para el Subdocumento DetalleProducto ---
+// No se exporta como un modelo independiente.
+const detalleProductoSchema = new Schema({
+  productoId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Producto', // Referencia al modelo Producto
+    required: true,
+  },
+  nombreProducto: { // Para mantener un registro si el nombre del producto cambia
+    type: String,
+    required: true,
+    trim: true,
+  },
+  cantidad: {
+    type: Number,
+    required: true,
+    min: 1,
+  },
+  precioUnitario: { // Almacena el precio unitario al momento de la compra
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  // Agregamos el campo 'subtotal' directamente aquí para cada ítem
+  subtotal: {
+    type: Number,
+    required: true, // Hacemos que sea requerido, se calculará automáticamente
+    min: 0,
+  },
+}, {
+  _id: false, // Los subdocumentos no necesitan su propio _id por defecto
+  timestamps: false, // No necesitamos timestamps para cada detalle de producto
 });
 
-module.exports = mongoose.model('Pedido', PedidoSchema);
+// Puedes añadir un hook pre-save directamente al subdocumento si lo prefieres,
+// pero a menudo es más eficiente manejar todos los cálculos en el hook principal del Pedido
+// para evitar múltiples iteraciones o lógica duplicada.
+// Por simplicidad, lo haremos en el pre-save del Pedido principal.
+
+
+// --- Esquema del Modelo Principal Pedido ---
+const pedidoSchema = new Schema({
+  clienteId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Cliente', // Referencia al modelo de Cliente
+    required: true,
+  },
+  fechaPedido: {
+    type: Date,
+    default: Date.now, // Fecha y hora actual por defecto
+    required: true,
+  },
+  estado: {
+    type: String,
+    enum: ['pendiente', 'confirmado', 'en_preparacion', 'en_envio', 'entregado', 'cancelado'],
+    default: 'pendiente',
+    required: true,
+  },
+  direccionEntrega: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  metodoPago: {
+    type: String,
+    required: true,
+    enum: ['Tarjeta de Crédito', 'Tarjeta de Débito', 'Efectivo', 'Transferencia', 'Mercado Pago', 'Otro'],
+  },
+  subtotal: { // Subtotal de todos los productos del pedido antes de descuentos/envío
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  descuentos: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  costoEnvio: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  total: { // Monto final a pagar
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  // Aquí usamos el esquema de subdocumento definido anteriormente
+  detalleProductos: [detalleProductoSchema], 
+  
+  fechaEstimadaEntrega: {
+    type: Date,
+    default: null,
+  },
+  repartidorId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Repartidor', // Referencia al modelo Repartidor
+    default: null,
+  },
+  observaciones: {
+    type: String,
+    trim: true,
+    default: null,
+  },
+}, {
+  timestamps: true, // Agrega createdAt y updatedAt
+});
+
+// --- Métodos de instancia o estáticos para el modelo ---
+
+// Método de instancia para calcular el total del pedido
+// Este método ahora también calcula los subtotales individuales de los productos.
+pedidoSchema.methods.calcularTotal = function() {
+  let subtotalGeneral = 0;
+  this.detalleProductos.forEach(item => {
+    // Calcula y asigna el subtotal para cada ítem de producto
+    item.subtotal = item.cantidad * item.precioUnitario; 
+    subtotalGeneral += item.subtotal;
+  });
+  this.subtotal = subtotalGeneral; // Asigna el subtotal general del pedido
+  this.total = this.subtotal - this.descuentos + this.costoEnvio;
+  if (this.total < 0) this.total = 0; // Asegurarse que el total no sea negativo
+  return this.total;
+};
+
+// Hook pre-save para asegurar que los subtotales y el total general se calculen antes de guardar
+pedidoSchema.pre('save', function(next) {
+  // Solo recalcula si los campos relevantes han sido modificados
+  if (this.isModified('detalleProductos') || this.isModified('descuentos') || this.isModified('costoEnvio')) {
+    this.calcularTotal();
+  }
+  next();
+});
+
+const Pedido = mongoose.model('Pedido', pedidoSchema);
+
+module.exports = Pedido;

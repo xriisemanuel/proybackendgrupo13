@@ -1,20 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const clienteController = require('../controllers/cliente.controller');
+const clienteController = require('../controllers/clienteController');
+// const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
 
-// Crear un nuevo cliente
-router.post('/', clienteController.crearCliente);
+// Rutas CRUD para Clientes
+router.post('/', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ clienteController.crearCliente);
+router.get('/', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'empleado']),*/ clienteController.obtenerClientes);
+router.get('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'empleado', 'cliente']),*/ clienteController.obtenerClientePorId);
+router.put('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'cliente']),*/ clienteController.actualizarCliente);
+router.delete('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ clienteController.eliminarCliente);
 
-// Obtener todos los clientes
-router.get('/', clienteController.obtenerClientes);
+// Rutas de funcionalidades específicas
+router.get('/:id/historial-pedidos', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'cliente']),*/ clienteController.obtenerHistorialPedidos);
+router.get('/:id/descuento-fidelidad', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'cliente']),*/ clienteController.calcularDescuentoFidelidad);
 
-// Obtener un cliente por ID
-router.get('/:id', clienteController.obtenerClientePorId);
-
-// Actualizar un cliente
-router.put('/:id', clienteController.actualizarCliente);
-
-// Eliminar un cliente
-router.delete('/:id', clienteController.eliminarCliente);
 
 module.exports = router;

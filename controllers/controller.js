@@ -1,1 +1,0 @@
-//controlador auxxiliar para la vista de los usuarios
