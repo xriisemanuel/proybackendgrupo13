@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const comboController = require('../controllers/comboController');
+const comboController = require('../controllers/combo.controller');
 // const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
 
 // Rutas CRUD para Combos

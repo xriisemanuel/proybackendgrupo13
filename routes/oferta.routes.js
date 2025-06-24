@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const ofertaController = require('../controllers/ofertaController');
+const ofertaController = require('../controllers/oferta.controller');
 // const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
 
 // Rutas CRUD para Ofertas

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const repartidorController = require('../controllers/repartidorController');
+const repartidorController = require('../controllers/repartidor.controller');
 // const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
 
 // Rutas CRUD para Repartidores

@@ -1,5 +1,5 @@
-const Producto = require('../models/Producto');
-const Categoria = require('../models/Categoria'); // Necesario para validar la categoría
+const Producto = require('../models/producto');
+const Categoria = require('../models/categoria.model'); // Necesario para validar la categoría
 
 // --- Funciones CRUD y de Negocio ---
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const pedidoController = require('../controllers/pedidoController');
+const pedidoController = require('../controllers/pedido.controller');
 // const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
 
 // Rutas CRUD para Pedidos

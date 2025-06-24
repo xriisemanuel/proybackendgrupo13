@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const usuarioController = require('../controllers/usuarioController');
+const usuarioController = require('../controllers/usuario.controller');
 // const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
 
 // Rutas de autenticación
@@ -15,7 +15,7 @@ router.get('/', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 
 router.get('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'editor', 'usuario']),*/ usuarioController.obtenerUsuarioPorId);
 router.put('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'usuario']),*/ usuarioController.actualizarUsuario);
 router.delete('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ usuarioController.eliminarUsuario);
-router.post('/restablecer-password/:token', usuarioController.restablecerPassword);
+// router.post('/restablecer-password/:token', usuarioController.restablecerPassword);
 // Ruta para cambiar contraseña (puede ser para el usuario autenticado)
 router.put('/cambiar-password/:id',  /*authMiddleware.autenticar,*/ usuarioController.cambiarPassword);
 

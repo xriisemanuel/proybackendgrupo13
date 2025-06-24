@@ -99,7 +99,8 @@ productoSchema.methods.actualizarStock = async function (cantidadCambio) {
     return this.stock;
 };
 
-
-const Producto = mongoose.model('Producto', productoSchema);
+// **LA MODIFICACIÓN CLAVE ESTÁ AQUÍ:**
+// Verificar si el modelo ya existe antes de compilarlo
+const Producto = mongoose.models.Producto || mongoose.model('Producto', productoSchema);
 
 module.exports = Producto;

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const ventaController = require('../controllers/ventaController');
+const ventaController = require('../controllers/venta.controller');
 // const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
 
 // Rutas para la gestión de Ventas

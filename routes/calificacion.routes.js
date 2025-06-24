@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const calificacionController = require('../controllers/calificacionController');
+const calificacionController = require('../controllers/calificacion.controller');
 // const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
 
 // Rutas CRUD para Calificaciones
