@@ -67,10 +67,20 @@ exports.crearPedido = async (req, res) => {
     // 4. (Opcional) Enviar email de confirmación
     const clienteEmail = cliente.email;
     if (clienteEmail && emailService && typeof emailService.enviarEmail === 'function') {
-      const emailSubject = `Confirmación de tu pedido #${nuevoPedido._id} - [Empresa]`;
-      const emailText = `Hola ${cliente.nombre},\n\nTu pedido ha sido recibido. Total: $${nuevoPedido.total}. Estado: ${nuevoPedido.estado}.\n\nGracias por tu compra!`;
-      const emailHtml = `<p>Hola ${cliente.nombre},</p><p>Tu pedido <strong>#${nuevoPedido._id}</strong> ha sido recibido con éxito. El monto total es de <strong>$${nuevoPedido.total}</strong>.</p><p>Estado actual: <strong>${nuevoPedido.estado}</strong>.</p><p>Gracias por tu compra!</p>`;
-      await emailService.enviarEmail(clienteEmail, emailSubject, emailText, emailHtml);
+      try {
+        const emailSubject = `Confirmación de tu pedido #${nuevoPedido._id} - [Empresa]`;
+        const emailText = `Hola ${cliente.nombre},\n\nTu pedido ha sido recibido. Total: $${nuevoPedido.total}. Estado: ${nuevoPedido.estado}.\n\nGracias por tu compra!`;
+        const emailHtml = `<p>Hola ${cliente.nombre},</p><p>Tu pedido <strong>#${nuevoPedido._id}</strong> ha sido recibido con éxito. El monto total es de <strong>$${nuevoPedido.total}</strong>.</p><p>Estado actual: <strong>${nuevoPedido.estado}</strong>.</p><p>Gracias por tu compra!</p>`;
+        const emailEnviado = await emailService.enviarEmail(clienteEmail, emailSubject, emailText, emailHtml);
+        if (emailEnviado) {
+          console.log('Email de confirmación enviado exitosamente');
+        } else {
+          console.warn('No se pudo enviar el email de confirmación');
+        }
+      } catch (emailError) {
+        console.warn('Error al enviar email de confirmación:', emailError.message);
+        // No fallamos el pedido por un error de email
+      }
     } else {
       console.warn('Servicio de email no disponible o no configurado para enviar confirmación de pedido.');
     }

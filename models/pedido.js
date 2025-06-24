@@ -27,7 +27,7 @@ const detalleProductoSchema = new Schema({
   // Agregamos el campo 'subtotal' directamente aquí para cada ítem
   subtotal: {
     type: Number,
-    required: true, // Hacemos que sea requerido, se calculará automáticamente
+    default: 0,
     min: 0,
   },
 }, {
@@ -71,7 +71,7 @@ const pedidoSchema = new Schema({
   },
   subtotal: { // Subtotal de todos los productos del pedido antes de descuentos/envío
     type: Number,
-    required: true,
+    default: 0,
     min: 0,
   },
   descuentos: {
@@ -86,7 +86,7 @@ const pedidoSchema = new Schema({
   },
   total: { // Monto final a pagar
     type: Number,
-    required: true,
+    default: 0,
     min: 0,
   },
   // Aquí usamos el esquema de subdocumento definido anteriormente
@@ -116,21 +116,37 @@ const pedidoSchema = new Schema({
 // Este método ahora también calcula los subtotales individuales de los productos.
 pedidoSchema.methods.calcularTotal = function() {
   let subtotalGeneral = 0;
-  this.detalleProductos.forEach(item => {
-    // Calcula y asigna el subtotal para cada ítem de producto
-    item.subtotal = item.cantidad * item.precioUnitario; 
-    subtotalGeneral += item.subtotal;
-  });
+  
+  // Verificar que detalleProductos existe y es un array
+  if (this.detalleProductos && Array.isArray(this.detalleProductos)) {
+    this.detalleProductos.forEach(item => {
+      // Verificar que el item tiene los campos necesarios
+      if (item.cantidad && item.precioUnitario) {
+        // Calcula y asigna el subtotal para cada ítem de producto
+        item.subtotal = item.cantidad * item.precioUnitario; 
+        subtotalGeneral += item.subtotal;
+      }
+    });
+  }
+  
   this.subtotal = subtotalGeneral; // Asigna el subtotal general del pedido
-  this.total = this.subtotal - this.descuentos + this.costoEnvio;
+  this.total = this.subtotal - (this.descuentos || 0) + (this.costoEnvio || 0);
   if (this.total < 0) this.total = 0; // Asegurarse que el total no sea negativo
   return this.total;
 };
 
+// Hook pre-validate para asegurar que los cálculos se hagan antes de la validación
+pedidoSchema.pre('validate', function(next) {
+  if (this.isNew && this.detalleProductos && this.detalleProductos.length > 0) {
+    this.calcularTotal();
+  }
+  next();
+});
+
 // Hook pre-save para asegurar que los subtotales y el total general se calculen antes de guardar
 pedidoSchema.pre('save', function(next) {
-  // Solo recalcula si los campos relevantes han sido modificados
-  if (this.isModified('detalleProductos') || this.isModified('descuentos') || this.isModified('costoEnvio')) {
+  // Siempre recalcula para documentos nuevos o cuando los campos relevantes han sido modificados
+  if (this.isNew || this.isModified('detalleProductos') || this.isModified('descuentos') || this.isModified('costoEnvio')) {
     this.calcularTotal();
   }
   next();

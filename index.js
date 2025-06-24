@@ -6,6 +6,7 @@ const productoRoutes = require('./routes/producto.route');
 const comboRoutes = require('./routes/combo.routes'); // <-- ¡Nuevo!
 const ofertaRoutes = require('./routes/oferta.routes'); // <-- ¡Nuevo!
 const repartidorRoutes = require('./routes/repartidor.routes'); // <-- ¡Nuevo!
+const clienteRoutes = require('./routes/cliente.routes'); // <-- ¡Nuevo!
 
 var app = express();
 app.use(express.json());
@@ -28,6 +29,8 @@ app.use('/api/categorias', categoriaRoutes);
 // Usar las rutas de producto
 app.use('/api/productos', productoRoutes);
 
+// Usar las rutas de cliente
+app.use('/api/cliente', clienteRoutes);
 
 app.use('/api/combos', comboRoutes);
 
