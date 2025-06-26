@@ -1,4 +1,4 @@
-const Producto = require('../models/producto');
+const Producto = require('../models/producto'); // Asumo 'producto.model.js'
 const Categoria = require('../models/categoria.model'); // Necesario para validar la categoría
 
 // --- Funciones CRUD y de Negocio ---
@@ -9,7 +9,14 @@ const Categoria = require('../models/categoria.model'); // Necesario para valida
  * @access Admin
  */
 exports.createProducto = async (req, res) => {
+  // Solo el Administrador puede crear productos
+  if (req.usuario.rol !== 'admin') {
+    return res.status(403).json({ mensaje: 'Acceso denegado. Solo administradores pueden crear productos.' });
+  }
+
   try {
+    // Elimino 'disponible' de la desestructuración de req.body,
+    // ya que debería ser calculado por el hook pre-save del modelo basado en el stock.
     const { nombre, descripcion, precio, categoriaId, imagenes, stock, popularidad } = req.body;
 
     // 1. Verificar si la categoría existe
@@ -27,7 +34,7 @@ exports.createProducto = async (req, res) => {
       imagenes: imagenes || [], // Asegura que 'imagenes' sea un array vacío si no se proporciona
       stock,
       popularidad: popularidad || 0,
-      // 'disponible' se establece automáticamente por el hook pre-save del modelo según el 'stock'
+      // 'disponible' no se pasa aquí, se establecerá automáticamente por el hook pre-save del modelo según el 'stock'.
     });
 
     await nuevoProducto.save();
@@ -56,11 +63,15 @@ exports.createProducto = async (req, res) => {
 /**
  * @route GET /api/productos
  * @desc Obtiene todos los productos (opcionalmente filtrados por disponibilidad o categoría)
- * @access Público
+ * @access Público (Clientes y otros roles pueden ver)
  * @queryParam disponible (boolean): true para disponibles, false para no disponibles
  * @queryParam categoria (string): ID de la categoría
  */
 exports.getProductos = async (req, res) => {
+  // Esta función es pública para Clientes y otros roles que necesitan ver el catálogo.
+  // No se requiere una verificación de rol aquí, ya que el middleware `autenticar` ya se aseguró de que el usuario esté logueado
+  // si la ruta en `index.js` está protegida. Si la ruta es completamente pública, no debería tener `autenticar` en `index.js`.
+  // Según la narrativa, el cliente puede navegar por los productos, por lo tanto, esta ruta puede ser accesible para todos los usuarios autenticados.
   try {
     const query = {};
     if (req.query.disponible !== undefined) {
@@ -87,9 +98,10 @@ exports.getProductos = async (req, res) => {
 /**
  * @route GET /api/productos/:id
  * @desc Obtiene un producto por su ID
- * @access Público
+ * @access Público (Clientes y otros roles pueden ver)
  */
 exports.getProducto = async (req, res) => {
+  // Similar a getProductos, esta función es pública para visualización.
   try {
     const producto = await Producto.findById(req.params.id)
       .populate('categoriaId', 'nombre');
@@ -112,9 +124,10 @@ exports.getProducto = async (req, res) => {
 /**
  * @route GET /api/productos/categoria/:categoriaId
  * @desc Obtiene productos por el ID de la categoría (método alternativo o específico)
- * @access Público
+ * @access Público (Clientes y otros roles pueden ver)
  */
 exports.getProductoPorCategoria = async (req, res) => {
+  // Similar a getProductos, esta función es pública para visualización.
   try {
     const { categoriaId } = req.params;
 
@@ -149,9 +162,20 @@ exports.getProductoPorCategoria = async (req, res) => {
  * @access Admin
  */
 exports.editProducto = async (req, res) => {
+  // Solo el Administrador puede actualizar productos
+  if (req.usuario.rol !== 'admin') {
+    return res.status(403).json({ mensaje: 'Acceso denegado. Solo administradores pueden actualizar productos.' });
+  }
+
   try {
     const { id } = req.params;
     const updateData = req.body;
+
+    // Elimino 'disponible' de updateData si se envía,
+    // ya que debería ser calculado por el hook pre-save del modelo basado en el stock.
+    if (updateData.hasOwnProperty('disponible')) {
+      delete updateData.disponible;
+    }
 
     // Si se intenta cambiar la categoría, verificar que la nueva categoría exista
     if (updateData.categoriaId) {
@@ -199,6 +223,11 @@ exports.editProducto = async (req, res) => {
  * @access Admin
  */
 exports.deleteProducto = async (req, res) => {
+  // Solo el Administrador puede eliminar productos
+  if (req.usuario.rol !== 'admin') {
+    return res.status(403).json({ mensaje: 'Acceso denegado. Solo administradores pueden eliminar productos.' });
+  }
+
   try {
     const productoEliminado = await Producto.findByIdAndDelete(req.params.id);
     if (!productoEliminado) {
@@ -225,12 +254,13 @@ exports.deleteProducto = async (req, res) => {
  * @access Público
  */
 exports.verificarDisponibilidadProducto = async (req, res) => {
+  // Esta función es pública para visualización de disponibilidad.
   try {
     const producto = await Producto.findById(req.params.id);
     if (!producto) {
       return res.status(404).json({ mensaje: 'Producto no encontrado.' });
     }
-    const disponible = producto.verificarDisponibilidad();
+    const disponible = producto.disponible; // Asumimos que 'disponible' ya se calcula en el modelo basado en el stock
     res.status(200).json({
       mensaje: 'Disponibilidad verificada.',
       disponible: disponible,
@@ -255,6 +285,10 @@ exports.verificarDisponibilidadProducto = async (req, res) => {
  * @access Admin
  */
 exports.actualizarStockProducto = async (req, res) => {
+  // Solo el Administrador puede actualizar el stock
+  if (req.usuario.rol !== 'admin') {
+    return res.status(403).json({ mensaje: 'Acceso denegado. Solo administradores pueden actualizar el stock de productos.' });
+  }
   try {
     const { id } = req.params;
     const { cantidad } = req.body; // Cantidad a añadir (positiva) o restar (negativa)
@@ -268,13 +302,15 @@ exports.actualizarStockProducto = async (req, res) => {
       return res.status(404).json({ mensaje: 'Producto no encontrado.' });
     }
 
-    // Utiliza el método de instancia del modelo para la lógica de stock y disponibilidad
-    const nuevoStock = await producto.actualizarStock(cantidad);
+    // Aquí el stock se actualiza directamente y la disponibilidad se recalcula
+    producto.stock += cantidad;
+    producto.disponible = producto.stock > 0; // Actualiza disponibilidad en base al nuevo stock
+    await producto.save(); // Esto también dispararía el hook pre-save si existe
 
     res.status(200).json({
       mensaje: 'Stock actualizado exitosamente.',
       producto: producto, // Devuelve el producto con el stock y disponibilidad actualizados
-      nuevoStock: nuevoStock
+      nuevoStock: producto.stock // Proporciona el nuevo stock directamente
     });
   } catch (error) {
     if (error.name === 'CastError') {
@@ -290,6 +326,12 @@ exports.actualizarStockProducto = async (req, res) => {
 
 // Puedes añadir una ruta para aumentar la popularidad si la lógica es sencilla
 exports.aumentarPopularidad = async (req, res) => {
+  // Considera si la popularidad es solo para admin o se actualiza automáticamente.
+  // Si se actualiza por interacción del usuario (ej. compra), no debería estar restringida al admin.
+  // Si es solo para gestión interna, entonces sí. Asumo gestión interna por ahora.
+  if (req.usuario.rol !== 'admin') {
+    return res.status(403).json({ mensaje: 'Acceso denegado. Solo administradores pueden modificar la popularidad directamente.' });
+  }
   try {
     const { id } = req.params;
     const producto = await Producto.findByIdAndUpdate(id, { $inc: { popularidad: 1 } }, { new: true });

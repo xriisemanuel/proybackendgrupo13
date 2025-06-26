@@ -4,17 +4,7 @@ const Rol = require('../models/rol'); // Asegúrate de que el modelo Rol esté d
 const Cliente = require('../models/cliente.model'); // Asegúrate de que el modelo Cliente esté definido correctamente
 
 const usuarioSchema = new Schema({
-    nombre: {
-        type: String,
-        required: true,
-        trim: true,
-    },
-    apellido: {
-        type: String,
-        required: true,
-        trim: true,
-    },
-    username: {
+  username: {
     type: String,
     required: true,
     unique: true, // Asegura que no haya usernames duplicados
@@ -37,16 +27,26 @@ const usuarioSchema = new Schema({
     type: String,
     trim: true,
     match: /^\+?[1-9]\d{1,14}$/, // Validación básica de formato de teléfono (E.164)
-    required: true, 
+    required: true,
   },
   estado: {
     type: Boolean,
     default: true, // Por defecto, el usuario está activo
   },
-  rolId: {
+  rolId: { // Nombre del rol del usuario, puede ser un string o una referencia a un modelo de Rol
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Rol', // Referencia al modelo de Rol
     required: true,
+  },
+  nombre: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  apellido: {
+    type: String,
+    required: true,
+    trim: true,
   },
   clienteId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -57,7 +57,7 @@ const usuarioSchema = new Schema({
 
 // --- Métodos de Instancia o Estáticos para el modelo (si necesitas lógica compleja aquí) ---
 // Por ejemplo, para encriptar la contraseña antes de guardar (pre-save hook)
-usuarioSchema.pre('save', async function(next) {
+usuarioSchema.pre('save', async function (next) {
   if (this.isModified('password')) {
     const bcrypt = require('bcryptjs'); // Necesitas instalar bcryptjs: npm install bcryptjs
     this.password = await bcrypt.hash(this.password, 10);
@@ -66,7 +66,7 @@ usuarioSchema.pre('save', async function(next) {
 });
 
 // Método para comparar contraseñas
-usuarioSchema.methods.compararPassword = async function(passwordIngresada) {
+usuarioSchema.methods.compararPassword = async function (passwordIngresada) {
   const bcrypt = require('bcryptjs');
   return await bcrypt.compare(passwordIngresada, this.password);
 };

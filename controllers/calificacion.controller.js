@@ -1,5 +1,5 @@
 const Calificacion = require('../models/Calificacion');
-const Pedido = require('../models/Pedido'); // Para verificar que el pedido existe y ya fue entregado
+const Pedido = require('../models/pedido'); // Para verificar que el pedido existe y ya fue entregado
 const Cliente = require('../models/cliente.model'); // Para verificar que el cliente existe
 const Producto = require('../models/producto'); // Para verificar productos en calificaciones específicas
 
@@ -7,14 +7,14 @@ const Producto = require('../models/producto'); // Para verificar productos en c
 
 exports.crearCalificacion = async (req, res) => {
   try {
-    const { 
-      pedidoId, 
-      clienteId, 
-      puntuacionComida, 
-      puntuacionServicio, 
-      puntuacionEntrega, 
-      comentario, 
-      calificacionProductos 
+    const {
+      pedidoId,
+      clienteId,
+      puntuacionComida,
+      puntuacionServicio,
+      puntuacionEntrega,
+      comentario,
+      calificacionProductos
     } = req.body;
 
     // 1. Verificar que el pedido exista y esté en estado 'entregado'
@@ -181,7 +181,7 @@ exports.getCalificacionesPorPedido = async (req, res) => {
 exports.getCalificacionesPromedioProducto = async (req, res) => {
   try {
     const { productoId } = req.params; // ID del producto
-    
+
     // Agregación para calcular el promedio de puntuación para un producto
     const result = await Calificacion.aggregate([
       { $unwind: '$calificacionProductos' }, // Desglosa el array de productos calificados

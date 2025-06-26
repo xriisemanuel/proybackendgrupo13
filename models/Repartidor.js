@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const repartidorSchema = new Schema({
-  usuarioId: { // Opcional: Referencia al modelo de Usuario si cada repartidor es también un usuario del sistema.
+  usuarioId: { // Referencia al modelo de Usuario
     type: Schema.Types.ObjectId,
     ref: 'Usuario',
     unique: true, // Un usuario solo puede ser un repartidor
@@ -22,7 +22,7 @@ const repartidorSchema = new Schema({
     trim: true,
     match: [/^\+?\d{8,15}$/, 'El formato del teléfono no es válido.'], // Regex para un formato de teléfono básico
   },
-  estado: { // Estado actual del repartidor (ej. 'disponible', 'en_entrega', 'ocupado', 'inactivo')
+  estado: { // Estado actual del repartidor (ej. 'disponible', 'en_entrega', 'fuera_de_servicio')
     type: String,
     enum: {
       values: ['disponible', 'en_entrega', 'fuera_de_servicio'],
@@ -30,6 +30,20 @@ const repartidorSchema = new Schema({
     },
     default: 'disponible',
     required: [true, 'El estado del repartidor es obligatorio.']
+  },
+  vehiculo: { // Campo añadido al modelo
+    type: String,
+    trim: true,
+    default: '',
+  },
+  numeroLicencia: { // Campo añadido al modelo
+    type: String,
+    trim: true,
+    default: '',
+  },
+  ubicacionActual: { // Objeto para almacenar la latitud y longitud actual del repartidor
+    lat: { type: Number, default: null },
+    lon: { type: Number, default: null },
   },
   historialEntregas: [{ // Un array de objetos que representen entregas pasadas
     pedidoId: {
@@ -62,14 +76,16 @@ const repartidorSchema = new Schema({
 // --- Hooks Mongoose ---
 
 // Hook pre-save y pre-findOneAndUpdate para asegurar la consistencia de 'disponible' con 'estado'
-repartidorSchema.pre('save', function(next) {
+repartidorSchema.pre('save', function (next) {
   if (this.isModified('estado') || this.isNew) {
     this.disponible = (this.estado === 'disponible');
   }
   next();
 });
 
-repartidorSchema.pre('findOneAndUpdate', function(next) {
+repartidorSchema.pre('findOneAndUpdate', function (next) {
+  // `this` en un hook de findOneAndUpdate es la query, no el documento.
+  // Usamos `this.getUpdate()` para obtener los datos que se están actualizando.
   const update = this.getUpdate();
   if (update.estado !== undefined) {
     update.disponible = (update.estado === 'disponible');
@@ -84,7 +100,7 @@ repartidorSchema.pre('findOneAndUpdate', function(next) {
  * @param {string} nuevoEstado - El nuevo estado ('disponible', 'en_entrega', 'fuera_de_servicio').
  * @returns {Promise<Repartidor>} El repartidor actualizado.
  */
-repartidorSchema.methods.cambiarEstado = async function(nuevoEstado) {
+repartidorSchema.methods.cambiarEstado = async function (nuevoEstado) {
   // Validar que el nuevoEstado sea uno de los permitidos por el enum
   const estadosValidos = repartidorSchema.path('estado').enumValues;
   if (!estadosValidos.includes(nuevoEstado)) {
@@ -99,10 +115,10 @@ repartidorSchema.methods.cambiarEstado = async function(nuevoEstado) {
 
 /**
  * Agrega una nueva entrada al historial de entregas y actualiza la calificación promedio.
- * @param {Object} entrega - Objeto con detalles de la entrega (pedidoId, calificacionCliente, etc.).
+ * @param {Object} entrega - Objeto con detalles de la entrega (pedidoId, calificacionCliente, fechaEntrega).
  * @returns {Promise<Repartidor>} El repartidor actualizado.
  */
-repartidorSchema.methods.registrarEntrega = async function(entrega) {
+repartidorSchema.methods.registrarEntrega = async function (entrega) {
   // Validaciones básicas para la entrega
   if (!entrega || !entrega.pedidoId) {
     throw new Error('La entrega debe tener al menos un pedidoId.');

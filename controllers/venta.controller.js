@@ -1,6 +1,6 @@
 const Venta = require('../models/Venta');
 const Cliente = require('../models/cliente.model'); // Necesario para actualizar puntos del cliente
-const Pedido = require('../models/Pedido');   // Necesario para verificar el pedido
+const Pedido = require('../models/pedido');   // Necesario para verificar el pedido
 
 // --- Operaciones CRUD Básicas y Específicas de Venta ---
 
@@ -26,7 +26,7 @@ exports.crearVenta = async (req, res) => {
       montoTotal: pedido.total, // Asume que el pedido tiene un campo 'total'
       metodoPago: metodoPago,
       // fechaVenta se establecerá por defecto
-      
+
     });
 
     await nuevaVenta.save();
