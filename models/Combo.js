@@ -37,7 +37,7 @@ const comboSchema = new Schema({
         trim: true,
         default: null,
     },
-    activo: { // Indica si el combo está disponible para la venta
+    estado: { // Indica si el combo está disponible para la venta
         type: Boolean,
         default: true,
     },

@@ -41,7 +41,7 @@ const ofertaSchema = new Schema({
     ref: 'Categoria',
     default: [], // Por defecto, un array vacío
   }],
-  activa: { // Indica si la oferta está activa y vigente
+  estado: { // Indica si la oferta está activa y vigente
     type: Boolean,
     default: true,
   },

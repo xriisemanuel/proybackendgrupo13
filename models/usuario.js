@@ -44,12 +44,12 @@ const usuarioSchema = new Schema({
     default: true, // Por defecto, el usuario está activo
   },
   rolId: {
-    type: Schema.Types.ObjectId,
+    type: mongoose.Schema.Types.ObjectId,
     ref: 'Rol', // Referencia al modelo de Rol
     required: true,
   },
   clienteId: {
-    type: Schema.Types.ObjectId,
+    type: mongoose.Schema.Types.ObjectId,
     ref: 'Cliente', // Referencia a un modelo de Cliente (si existe)
     default: null, // Opcional, si el usuario puede no estar asociado a un cliente específico
   },
