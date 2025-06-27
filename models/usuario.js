@@ -55,16 +55,6 @@ const usuarioSchema = new Schema({
   },
 });
 
-// --- Métodos de Instancia o Estáticos para el modelo (si necesitas lógica compleja aquí) ---
-// Por ejemplo, para encriptar la contraseña antes de guardar (pre-save hook)
-usuarioSchema.pre('save', async function (next) {
-  if (this.isModified('password')) {
-    const bcrypt = require('bcryptjs'); // Necesitas instalar bcryptjs: npm install bcryptjs
-    this.password = await bcrypt.hash(this.password, 10);
-  }
-  next();
-});
-
 // Método para comparar contraseñas
 usuarioSchema.methods.compararPassword = async function (passwordIngresada) {
   const bcrypt = require('bcryptjs');
