@@ -66,7 +66,7 @@ app.use('/api/ofertas', autenticar, autorizar(['admin', 'supervisor_ventas']), o
 // - Repartidor: Puede actualizar su ubicación/estado.
 // - Administrador: Puede ver/gestionar repartidores.
 // La lógica granular debe estar en el controlador de Repartidores.
-app.use('/api/repartidores', autenticar, repartidorRoutes);
+app.use('/api/repartidores', autenticar, autorizar(['admin', 'repartidor']), repartidorRoutes);
 
 // Rutas de Clientes:
 // - El registro de clientes se hará a través de /api/auth/register.

@@ -1,11 +1,10 @@
-// controllers/auth.controller.js
-const Usuario = require('../models/usuario'); // Ajustado a .model
-const Cliente = require('../models/cliente.model');
-const Rol = require('../models/rol');       // Ajustado a .model
+const Usuario = require('../models/usuario'); // Asegúrate de que la ruta sea correcta
+const Cliente = require('../models/cliente.model'); // Asegúrate de que la ruta sea correcta
+const Rol = require('../models/rol');       // Asegúrate de que la ruta sea correcta
+const Repartidor = require('../models/Repartidor'); // Asegúrate de que la ruta sea correcta
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-// Asegúrate de que JWT_SECRET esté disponible desde tus variables de entorno
 const JWT_SECRET = process.env.JWT_SECRET;
 
 /**
@@ -15,12 +14,11 @@ const JWT_SECRET = process.env.JWT_SECRET;
  */
 exports.registerUser = async (req, res) => {
   try {
-    const { username, password, email, telefono, rolName, nombreCliente, apellidoCliente, nombre, apellido } = req.body;
+    const { username, password, email, telefono, rolName, nombre, apellido } = req.body;
 
     // Validar que los campos mínimos estén presentes
-    // Se asume que 'nombre' y 'apellido' son parte del modelo Usuario si se pasan en el body
-    if (!username || !password || !email || !rolName) {
-      return res.status(400).json({ mensaje: 'Todos los campos obligatorios (username, password, email, rolName) deben ser proporcionados.' });
+    if (!username || !password || !email || !rolName || !nombre || !apellido) {
+      return res.status(400).json({ mensaje: 'Todos los campos obligatorios (username, password, email, rolName, nombre, apellido) deben ser proporcionados.' });
     }
 
     // 1. Verificar si el nombre de usuario o el email ya existen
@@ -29,13 +27,13 @@ exports.registerUser = async (req, res) => {
       return res.status(400).json({ mensaje: 'El nombre de usuario o el email ya están en uso.' });
     }
 
-    // 2. Buscar el rol por su nombre (rolName en el body)
-    const foundRol = await Rol.findOne({ nombre: rolName });
+    // 2. Buscar el rol por su nombre
+    const foundRol = await Rol.findOne({ nombre: rolName.toLowerCase() }); // Asegúrate de buscar el rol en minúsculas
     if (!foundRol) {
       return res.status(400).json({ mensaje: `Rol no válido: '${rolName}'. Los roles permitidos son: admin, cliente, supervisor_cocina, supervisor_ventas, repartidor.` });
     }
 
-    // 3. Hashear la contraseña antes de guardarla
+    // 3. Hashear la contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 4. Crear el nuevo usuario
@@ -46,17 +44,17 @@ exports.registerUser = async (req, res) => {
       telefono: telefono || null,
       rolId: foundRol._id,
       estado: true,
-      nombre: nombre || null,    // Se asume que el modelo Usuario tiene 'nombre'
-      apellido: apellido || null // Se asume que el modelo Usuario tiene 'apellido'
-      // 'clienteId' se establecerá condicionalmente más abajo si el rol es 'cliente'
+      nombre,
+      apellido
     });
 
     // 5. Si el rol es 'cliente', crear un registro en la colección Cliente y vincularlo
+    // NOTA: Esta lógica se mantiene para el rol 'cliente'.
     if (foundRol.nombre === 'cliente') {
       const newCliente = new Cliente({
-        nombre: nombreCliente || nombre || username, // Prioriza nombreCliente, luego nombre de Usuario, sino username
-        apellido: apellidoCliente || apellido || null,
-        telefono: telefono || null,
+        nombre: nombre,
+        apellido: apellido,
+        telefono: telefono,
         email,
         direccion: '',
         fechaNacimiento: null,
@@ -67,9 +65,27 @@ exports.registerUser = async (req, res) => {
       newUsuario.clienteId = newCliente._id;
     }
 
-    await newUsuario.save();
+    await newUsuario.save(); // Guarda el usuario antes de intentar crear el perfil de repartidor
 
-    // 6. Generar el JWT
+    // 6. Si el rol es 'repartidor', crear un perfil de Repartidor y vincularlo
+    if (foundRol.nombre === 'repartidor') {
+      const newRepartidor = new Repartidor({
+        usuarioId: newUsuario._id, // Vincula el perfil de repartidor al ID del usuario
+        estado: 'disponible', // Estado inicial por defecto
+        vehiculo: '', // Puedes pedir esto en el frontend si es necesario
+        numeroLicencia: '' // Puedes pedir esto en el frontend si es necesario
+        // Los campos nombre, apellido, telefono, email no se duplican aquí,
+        // se obtienen del modelo Usuario a través de la referencia.
+      });
+      await newRepartidor.save();
+      console.log('Perfil de Repartidor creado para el usuario:', newUsuario.username);
+    }
+
+    // Para otros roles (admin, supervisor_cocina, supervisor_ventas),
+    // no se necesita un perfil adicional en colecciones separadas
+    // según los modelos actuales. La creación del Usuario es suficiente.
+
+    // 7. Generar el JWT
     const token = jwt.sign(
       { _id: newUsuario._id, rol: foundRol.nombre },
       JWT_SECRET,
@@ -104,15 +120,8 @@ exports.loginUser = async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // --- INICIO DE LÍNEAS DE DEPURACIÓN ---
-    console.log('--- INTENTO DE LOGIN ---');
-    console.log('Username recibido:', username);
-    console.log('Password recibido (texto plano):', password); // ¡ATENCIÓN: No loguear passwords en producción! Solo para depuración.
-    // --- FIN DE LÍNEAS DE DEPURACIÓN ---
-
     // Verificar que se proporcionen ambos campos
     if (!username || !password) {
-      console.log('Falla: Nombre de usuario o contraseña no proporcionados.');
       return res.status(400).json({ mensaje: 'Se requiere nombre de usuario y contraseña para iniciar sesión.' });
     }
 
@@ -120,25 +129,17 @@ exports.loginUser = async (req, res) => {
     const user = await Usuario.findOne({ username }).populate('rolId');
 
     if (!user) {
-      console.log('Falla: Usuario no encontrado en la base de datos para el username:', username);
       return res.status(400).json({ mensaje: 'Credenciales inválidas.' });
     }
-
-    // --- INICIO DE LÍNEAS DE DEPURACIÓN ---
-    console.log('Usuario encontrado:', user.username);
-    console.log('Password hasheado en DB para este usuario:', user.password);
-    // --- FIN DE LÍNEAS DE DEPURACIÓN ---
 
     // 2. Comparar la contraseña proporcionada con la hasheada en la DB
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      console.log('Falla: La contraseña proporcionada NO coincide con la contraseña hasheada en DB.');
       return res.status(400).json({ mensaje: 'Credenciales inválidas.' });
     }
 
     // 3. Verificar si la cuenta de usuario está activa
     if (!user.estado) {
-      console.log('Falla: La cuenta de usuario está inactiva.');
       return res.status(403).json({ mensaje: 'La cuenta de usuario está inactiva. Por favor, contacte al soporte.' });
     }
 
@@ -149,7 +150,6 @@ exports.loginUser = async (req, res) => {
       { expiresIn: '1h' }
     );
 
-    console.log('Éxito: Inicio de sesión exitoso.');
     res.json({
       mensaje: 'Inicio de sesión exitoso',
       token,
