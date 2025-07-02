@@ -22,6 +22,7 @@ const rolSchema = new mongoose.Schema({
     required: true,
     unique: true,
     trim: true,
+    lowercase: true, // Convierte el nombre a minúsculas para evitar duplicados
   },
   estado: {
     type: Boolean,

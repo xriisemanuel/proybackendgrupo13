@@ -35,20 +35,8 @@ app.use('/api/auth', authRoutes);
 // Rutas de Roles: Solo accesible por Administrador
 // (ej. POST, GET, PUT, DELETE /api/rol)
 app.use('/api/rol', autenticar, autorizar(['admin']), rolRoutes);
-
-// Rutas de Usuarios: Solo accesible por Administrador (gestión de usuarios)
-// (ej. POST, GET, PUT, DELETE /api/usuario)
 app.use('/api/usuario', autenticar, autorizar(['admin']), usuarioRoutes);
-
-// Rutas de Pedidos:
-// - Clientes: pueden crear pedidos (POST), ver sus propios pedidos (GET).
-// - Supervisor de Cocina: puede actualizar el estado del pedido (PUT).
-// - Administrador: puede ver todos los pedidos y realizar cualquier operación (GET, PUT, DELETE).
-// La lógica más granular (ej. solo ver sus propios pedidos) debería estar dentro del controlador de Pedidos.
-app.use('/api/pedido', autenticar, pedidoRoutes); // El controlador de pedidos manejará la lógica específica de roles
-
-// Rutas de Ventas: Solo accesible por Administrador y Supervisor de Ventas
-// (ej. GET /api/ventas, para ver métricas y gráficos)
+app.use('/api/pedido', autenticar, pedidoRoutes);
 app.use('/api/ventas', autenticar, autorizar(['admin', 'supervisor_ventas']), ventaRoutes);
 
 // Rutas de Calificaciones: Solo accesible por Clientes (para calificar sus propios pedidos)
@@ -56,13 +44,6 @@ app.use('/api/ventas', autenticar, autorizar(['admin', 'supervisor_ventas']), ve
 app.use('/api/calificaciones', autenticar, autorizar(['cliente']), calificacionRoutes);
 
 // Rutas de Categorías:
-// - Público: Puede listar y ver categorías (GET).
-// - Administrador: Puede crear, actualizar, eliminar categorías (POST, PUT, DELETE).
-// Aquí separamos para dar acceso público a la visualización.
-// Para esto, necesitarías definir rutas específicas dentro de categoriaRoutes que usen o no el middleware.
-// O bien, puedes aplicar autenticar y autorizar a todo el módulo y manejar excepciones dentro del controlador
-// para las operaciones GET si lo quieres público, o mantenerlo protegido para todo el módulo como se muestra.
-// Opción 1: Todo protegido por administrador (más simple para empezar):
 app.use('/api/categorias', autenticar, autorizar(['admin']), categoriaRoutes);
 // Opción 2: Permitir GET público, proteger POST/PUT/DELETE dentro de categoriaRoutes
 // app.get('/api/categorias', categoriaRoutes); // Aquí solo rutas GET, sin middleware
