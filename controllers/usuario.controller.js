@@ -1,254 +1,258 @@
-const Usuario = require('../models/usuario');
-const jwt = require('jsonwebtoken'); // Necesitas instalar jsonwebtoken: npm install jsonwebtoken
-const bcrypt = require('bcryptjs'); // Necesitas instalar bcryptjs si aún no lo hiciste
+const Usuario = require('../models/usuario'); // Asegúrate de que la ruta sea correcta
+const Rol = require('../models/rol');       // Necesario para buscar roles por nombre
+const Cliente = require('../models/cliente.model'); // Necesario si el rol es 'cliente'
+const bcrypt = require('bcryptjs'); // Para hashear y comparar contraseñas
 
-// Configura tu secreto JWT (guárdalo en variables de entorno)
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey';
-
-// --- Operaciones CRUD Básicas ---
-
-exports.crearUsuario = async (req, res) => {
+/**
+ * @desc Obtener todos los usuarios
+ * @route GET /api/usuario
+ * @access Admin
+ */
+exports.getUsuarios = async (req, res) => {
   try {
-    const nuevoUsuario = new Usuario(req.body);
-    await nuevoUsuario.save();
-    res.status(201).json({
-      mensaje: 'Usuario creado exitosamente',
-      usuario: nuevoUsuario
-    });
-  } catch (error) {
-    if (error.code === 11000) { // Código de error para duplicados de unique
-      return res.status(400).json({
-        mensaje: 'El username o email ya existen.'
-      });
-    }
-    res.status(500).json({
-      mensaje: 'Error al crear el usuario',
-      error: error.message
-    });
-  }
-};
-
-exports.listarUsuarios = async (req, res) => {
-  try {
+    // Popula el campo rolId para obtener el objeto completo del rol
+    // Y popula clienteId si es necesario mostrar datos del cliente.
     const usuarios = await Usuario.find({})
-      .populate('rolId', 'nombre') // Trae el nombre del rol
-      .populate('clienteId', 'nombre'); // Trae el nombre del cliente (si existe)
+      .populate('rolId')
+      .populate('clienteId');
     res.status(200).json(usuarios);
   } catch (error) {
-    res.status(500).json({
-      mensaje: 'Error al listar usuarios',
-      error: error.message
-    });
+    console.error('Error al obtener usuarios:', error);
+    res.status(500).json({ mensaje: 'Error interno del servidor al obtener usuarios.', error: error.message });
   }
 };
 
-exports.obtenerUsuarioPorId = async (req, res) => {
+/**
+ * @desc Crear un nuevo usuario (para uso de administradores)
+ * @route POST /api/usuario
+ * @access Admin
+ * @body {string} username
+ * @body {string} password
+ * @body {string} email
+ * @body {string} telefono
+ * @body {string} rolName - Nombre del rol (ej. 'admin', 'cliente', 'repartidor')
+ * @body {string} nombre
+ * @body {string} apellido
+ * @body {string} [nombreCliente] - Opcional, si el rol es 'cliente'
+ * @body {string} [apellidoCliente] - Opcional, si el rol es 'cliente'
+ */
+exports.createUsuario = async (req, res) => {
   try {
-    const usuario = await Usuario.findById(req.params.id)
-      .populate('rolId', 'nombre')
-      .populate('clienteId', 'nombre');
-    if (!usuario) {
-      return res.status(404).json({
-        mensaje: 'Usuario no encontrado'
-      });
+    const { username, password, email, telefono, rolName, nombre, apellido, nombreCliente, apellidoCliente } = req.body;
+
+    // Validar campos obligatorios
+    if (!username || !password || !email || !telefono || !rolName || !nombre || !apellido) {
+      return res.status(400).json({ mensaje: 'Todos los campos obligatorios (username, password, email, telefono, rolName, nombre, apellido) deben ser proporcionados.' });
     }
+
+    // 1. Verificar si el username o email ya existen
+    let userExists = await Usuario.findOne({ $or: [{ username }, { email }] });
+    if (userExists) {
+      return res.status(400).json({ mensaje: 'El nombre de usuario o el email ya están en uso.' });
+    }
+
+    // 2. Buscar el rol por su nombre
+    const foundRol = await Rol.findOne({ nombre: rolName.toLowerCase() }); // Asegúrate de buscar en minúsculas
+    if (!foundRol) {
+      return res.status(400).json({ mensaje: `Rol no válido: '${rolName}'.` });
+    }
+
+    // 3. Hashear la contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 4. Crear el nuevo usuario
+    let newUsuario = new Usuario({
+      username,
+      password: hashedPassword,
+      email,
+      telefono,
+      nombre,
+      apellido,
+      rolId: foundRol._id, // Asigna el ObjectId del rol
+      estado: true // Por defecto, el usuario está activo
+    });
+
+    // 5. Si el rol es 'cliente', crear un registro en la colección Cliente y vincularlo
+    if (foundRol.nombre === 'cliente') {
+      const newCliente = new Cliente({
+        nombre: nombreCliente || nombre,
+        apellido: apellidoCliente || apellido,
+        telefono: telefono,
+        email,
+        direccion: '',
+        fechaNacimiento: null,
+        preferenciasAlimentarias: [],
+        puntos: 0
+      });
+      await newCliente.save();
+      newUsuario.clienteId = newCliente._id; // Vincular el ObjectId del Cliente al Usuario
+    }
+
+    await newUsuario.save();
+
+    // Popula el rol para la respuesta
+    await newUsuario.populate('rolId');
+
+    res.status(201).json({ mensaje: 'Usuario creado exitosamente', usuario: newUsuario });
+  } catch (error) {
+    console.error('Error al crear usuario:', error);
+    if (error.code === 11000) { // Error de clave duplicada de MongoDB
+      return res.status(400).json({ mensaje: 'El nombre de usuario o email ya existen.' });
+    }
+    res.status(500).json({ mensaje: 'Error interno del servidor al crear el usuario.', error: error.message });
+  }
+};
+
+/**
+ * @desc Obtener un usuario por ID
+ * @route GET /api/usuario/:id
+ * @access Authenticated (Admin, o el propio usuario)
+ */
+exports.getUsuarioById = async (req, res) => {
+  try {
+    // Popula el campo rolId para obtener el objeto completo del rol
+    const usuario = await Usuario.findById(req.params.id).populate('rolId');
+    if (!usuario) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
+    }
+
+    // Lógica de autorización:
+    // Un administrador puede ver cualquier usuario.
+    // Un usuario normal solo puede ver su propio perfil.
+    if (req.user && req.user.rol !== 'admin' && req.user._id.toString() !== usuario._id.toString()) {
+      return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para ver este perfil de usuario.' });
+    }
+
     res.status(200).json(usuario);
   } catch (error) {
-    res.status(500).json({
-      mensaje: 'Error al obtener usuario',
-      error: error.message
-    });
+    console.error('Error al obtener usuario por ID:', error);
+    if (error.name === 'CastError') {
+      return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+    }
+    res.status(500).json({ mensaje: 'Error interno del servidor al obtener el usuario por ID.', error: error.message });
   }
 };
 
-exports.actualizarUsuario = async (req, res) => {
+/**
+ * @desc Actualizar un usuario por ID
+ * @route PUT /api/usuario/:id
+ * @access Authenticated (Admin, o el propio usuario)
+ * @body {string} [username]
+ * @body {string} [password]
+ * @body {string} [email]
+ * @body {string} [telefono]
+ * @body {boolean} [estado]
+ * @body {string} [rolName] - Para cambiar el rol (solo admin)
+ * @body {string} [nombre]
+ * @body {string} [apellido]
+ */
+exports.updateUsuario = async (req, res) => {
   try {
-    const {
-      id
-    } = req.params;
-    const datosActualizar = { ...req.body
-    };
+    const { username, password, email, telefono, estado, rolName, nombre, apellido } = req.body;
+    const usuario = await Usuario.findById(req.params.id).populate('rolId'); // Popula para autorización
 
-    // Si se intenta actualizar la contraseña, la encriptamos de nuevo
-    if (datosActualizar.password) {
-      datosActualizar.password = await bcrypt.hash(datosActualizar.password, 10);
-    }
-
-    const usuarioActualizado = await Usuario.findByIdAndUpdate(id, datosActualizar, {
-      new: true, // Devuelve el documento actualizado
-      runValidators: true // Corre las validaciones definidas en el esquema
-    });
-
-    if (!usuarioActualizado) {
-      return res.status(404).json({
-        mensaje: 'Usuario no encontrado para actualizar'
-      });
-    }
-    res.status(200).json({
-      mensaje: 'Usuario actualizado exitosamente',
-      usuario: usuarioActualizado
-    });
-  } catch (error) {
-    res.status(500).json({
-      mensaje: 'Error al actualizar el usuario',
-      error: error.message
-    });
-  }
-};
-
-exports.eliminarUsuario = async (req, res) => {
-  try {
-    const usuarioEliminado = await Usuario.findByIdAndDelete(req.params.id);
-    if (!usuarioEliminado) {
-      return res.status(404).json({
-        mensaje: 'Usuario no encontrado para eliminar'
-      });
-    }
-    res.status(200).json({
-      mensaje: 'Usuario eliminado exitosamente'
-    });
-  } catch (error) {
-    res.status(500).json({
-      mensaje: 'Error al eliminar el usuario',
-      error: error.message
-    });
-  }
-};
-
-// --- Métodos de Autenticación y Autorización ---
-
-exports.loginUsuario = async (req, res) => {
-  const {
-    username,
-    password
-  } = req.body;
-  try {
-    const usuario = await Usuario.findOne({
-      username
-    });
     if (!usuario) {
-      return res.status(400).json({
-        mensaje: 'Credenciales inválidas'
-      });
+      return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
     }
 
-    const isMatch = await usuario.compararPassword(password);
-    if (!isMatch) {
-      return res.status(400).json({
-        mensaje: 'Credenciales inválidas'
-      });
+    // Lógica de autorización:
+    // Un administrador puede actualizar cualquier usuario.
+    // Un usuario normal solo puede actualizar su propio perfil (excepto el rol).
+    if (req.user && req.user.rol !== 'admin' && req.user._id.toString() !== usuario._id.toString()) {
+      return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para actualizar este perfil de usuario.' });
     }
 
-    // Si las credenciales son válidas, generamos un token JWT
-    const token = jwt.sign({
-      id: usuario._id,
-      rol: usuario.rolId
-    }, JWT_SECRET, {
-      expiresIn: '1h'
-    }); // Token expira en 1 hora
-
-    res.status(200).json({
-      mensaje: 'Inicio de sesión exitoso',
-      token,
-      usuario: {
-        id: usuario._id,
-        username: usuario.username,
-        email: usuario.email,
-        rolId: usuario.rolId,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({
-      mensaje: 'Error en el inicio de sesión',
-      error: error.message
-    });
-  }
-};
-
-exports.logout = (req, res) => {
-  // En un API RESTful sin sesiones del lado del servidor, "logout" se maneja limpiando el token del lado del cliente.
-  // Aquí simplemente enviamos una respuesta.
-  res.status(200).json({
-    mensaje: 'Sesión cerrada exitosamente (token debe ser eliminado del cliente)'
-  });
-};
-
-exports.cambiarPassword = async (req, res) => {
-  const {
-    id
-  } = req.params; // O req.usuario.id si se obtiene del token
-  const {
-    passwordActual,
-    nuevaPassword
-  } = req.body;
-
-  try {
-    const usuario = await Usuario.findById(id);
-    if (!usuario) {
-      return res.status(404).json({
-        mensaje: 'Usuario no encontrado'
-      });
+    // Actualizar campos si se proporcionan
+    if (username && username !== usuario.username) {
+      const usernameExists = await Usuario.findOne({ username });
+      if (usernameExists && usernameExists._id.toString() !== usuario._id.toString()) {
+        return res.status(400).json({ mensaje: 'El nombre de usuario ya está en uso.' });
+      }
+      usuario.username = username;
     }
 
-    const isMatch = await usuario.compararPassword(passwordActual);
-    if (!isMatch) {
-      return res.status(400).json({
-        mensaje: 'Contraseña actual incorrecta'
-      });
+    if (email && email !== usuario.email) {
+      const emailExists = await Usuario.findOne({ email });
+      if (emailExists && emailExists._id.toString() !== usuario._id.toString()) {
+        return res.status(400).json({ mensaje: 'El email ya está en uso.' });
+      }
+      usuario.email = email;
     }
 
-    usuario.password = nuevaPassword; // El pre-save hook se encargará de hashear la nueva contraseña
+    if (password) {
+      usuario.password = await bcrypt.hash(password, 10); // Hashear nueva contraseña
+    }
+    if (telefono) usuario.telefono = telefono;
+    if (nombre) usuario.nombre = nombre;
+    if (apellido) usuario.apellido = apellido;
+    if (estado !== undefined && req.user.rol === 'admin') { // Solo admin puede cambiar el estado
+      usuario.estado = estado;
+    }
+
+    // Cambiar rol (solo si es admin y se proporciona un rolName diferente)
+    if (rolName && req.user.rol === 'admin' && rolName.toLowerCase() !== usuario.rolId.nombre) {
+      const newRol = await Rol.findOne({ nombre: rolName.toLowerCase() });
+      if (!newRol) {
+        return res.status(400).json({ mensaje: `Rol '${rolName}' no válido.` });
+      }
+      usuario.rolId = newRol._id;
+
+      // Lógica adicional si el rol cambia a/de 'cliente'
+      if (newRol.nombre === 'cliente' && !usuario.clienteId) {
+        const newCliente = new Cliente({
+          nombre: usuario.nombre,
+          apellido: usuario.apellido,
+          telefono: usuario.telefono,
+          email: usuario.email
+        });
+        await newCliente.save();
+        usuario.clienteId = newCliente._id;
+      } else if (newRol.nombre !== 'cliente' && usuario.clienteId) {
+        usuario.clienteId = null;
+      }
+    }
+
     await usuario.save();
+    // Popula el rol para la respuesta final
+    await usuario.populate('rolId');
 
-    res.status(200).json({
-      mensaje: 'Contraseña cambiada exitosamente'
-    });
+    res.status(200).json({ mensaje: 'Usuario actualizado exitosamente', usuario });
   } catch (error) {
-    res.status(500).json({
-      mensaje: 'Error al cambiar la contraseña',
-      error: error.message
-    });
+    console.error('Error al actualizar usuario:', error);
+    if (error.name === 'CastError') {
+      return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+    }
+    if (error.code === 11000) { // Error de clave duplicada
+      return res.status(400).json({ mensaje: 'El nombre de usuario o email ya existen.' });
+    }
+    res.status(500).json({ mensaje: 'Error interno del servidor al actualizar el usuario.', error: error.message });
   }
 };
 
-// --- Lógica de recuperación de contraseña (requeriría un servicio de correo) ---
-exports.recuperarPassword = async (req, res) => {
-  const {
-    email
-  } = req.body;
+/**
+ * @desc Eliminar un usuario por ID
+ * @route DELETE /api/usuario/:id
+ * @access Admin
+ */
+exports.deleteUsuario = async (req, res) => {
   try {
-    const usuario = await Usuario.findOne({
-      email
-    });
+    const usuario = await Usuario.findById(req.params.id);
+
     if (!usuario) {
-      return res.status(404).json({
-        mensaje: 'Usuario con ese email no encontrado'
-      });
+      return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
     }
 
-    // Aquí generarías un token de recuperación y lo guardarías en el usuario (con fecha de expiración)
-    // const resetToken = crypto.randomBytes(32).toString('hex');
-    // usuario.resetPasswordToken = resetToken;
-    // usuario.resetPasswordExpires = Date.now() + 3600000; // 1 hora
-    // await usuario.save();
+    if (usuario.clienteId) {
+      await Cliente.deleteOne({ _id: usuario.clienteId });
+    }
 
-    // Luego, enviarías un email al usuario con un enlace que contenga este token
-    // await enviarEmail(usuario.email, 'Recuperación de Contraseña', `Haz clic en este enlace: /reset-password/${resetToken}`);
-
-    res.status(200).json({
-      mensaje: 'Si el email existe, se ha enviado un enlace de recuperación.'
-    });
+    await Usuario.deleteOne({ _id: req.params.id });
+    res.status(200).json({ mensaje: 'Usuario eliminado exitosamente' });
   } catch (error) {
-    res.status(500).json({
-      mensaje: 'Error en la recuperación de contraseña',
-      error: error.message
-    });
+    console.error('Error al eliminar usuario:', error);
+    if (error.name === 'CastError') {
+      return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+    }
+    res.status(500).json({ mensaje: 'Error interno del servidor al eliminar el usuario.', error: error.message });
   }
 };
-
-// Nota: Las funciones `validarCredenciales`, `listarUsuariosPorRol`, `verificarToken`, `enviarEmail`
-// son auxiliares o pueden ser parte de un middleware o servicio aparte.
-// - `validarCredenciales` se incorpora en `loginUsuario`.
-// - `listarUsuariosPorRol` se podría implementar como otro método en el controlador si es una ruta específica.
-// - `verificarToken` sería un middleware de autenticación (ver `middleware/auth.js`).
-// - `enviarEmail` sería un servicio externo (por ejemplo, `services/emailService.js`).
