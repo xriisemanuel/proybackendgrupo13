@@ -1,255 +1,242 @@
-const Cliente = require('../models/cliente.model'); // Importa el modelo Cliente
-const Usuario = require('../models/usuario'); // Necesario para vincular el clienteId al usuario autenticado
-const Pedido = require('../models/pedido'); // Necesario para obtener el historial de pedidos
+const Cliente = require('../models/cliente.model'); // Asegúrate de que la ruta a tu modelo Cliente sea correcta
+const Usuario = require('../models/usuario'); // Necesario para verificar usuarios si es necesario
+const Rol = require('../models/rol'); // Necesario para verificar roles si es necesario
 
-// --- Operaciones CRUD Básicas ---
-
-exports.crearCliente = async (req, res) => {
-  // La creación de clientes como parte del registro de usuario ya se maneja en auth.controller.js.
-  // Esta función, si se usa, debería ser para que un Administrador cree un perfil de cliente manualmente,
-  // o para un proceso interno. Por lo tanto, la restringimos al rol 'admin'.
-  if (req.usuario.rol !== 'admin') {
-    return res.status(403).json({ mensaje: 'Acceso denegado. Solo administradores pueden crear clientes directamente.' });
-  }
-
+/**
+ * @desc Obtener todos los perfiles de clientes
+ * @route GET /api/clientes
+ * @access Admin
+ */
+exports.getClientes = async (req, res) => {
+  console.log('ClienteController: Intentando obtener todos los clientes...');
   try {
-    const nuevoCliente = new Cliente(req.body);
-    await nuevoCliente.save();
-    res.status(201).json({
-      mensaje: 'Cliente creado exitosamente',
-      cliente: nuevoCliente
+    // Popula el campo usuarioId y, dentro de usuarioId, popula rolId
+    // Esto traerá los datos completos del usuario asociado y su rol
+    const clientes = await Cliente.find({}).populate({
+      path: 'usuarioId',
+      select: 'username email nombre apellido telefono rolId', // Campos a seleccionar del Usuario
+      populate: {
+        path: 'rolId', // Popula el rolId dentro del Usuario
+        select: 'nombre' // Solo el nombre del Rol
+      }
     });
-  } catch (error) {
-    if (error.code === 11000) { // Error de duplicado (ej. email único)
-      return res.status(400).json({
-        mensaje: 'El email del cliente ya está registrado.'
-      });
-    }
-    console.error('Error al crear el cliente:', error);
-    res.status(500).json({
-      mensaje: 'Error al crear el cliente',
-      error: error.message
-    });
-  }
-};
-
-exports.obtenerClientes = async (req, res) => {
-  // Solo el Administrador puede listar todos los clientes.
-  if (req.usuario.rol !== 'admin') {
-    return res.status(403).json({ mensaje: 'Acceso denegado. Solo administradores pueden listar todos los clientes.' });
-  }
-
-  try {
-    const clientes = await Cliente.find({});
+    console.log('ClienteController: Clientes obtenidos exitosamente. Cantidad:', clientes.length);
     res.status(200).json(clientes);
   } catch (error) {
-    console.error('Error al obtener clientes:', error);
+    console.error('ClienteController: Error al obtener clientes:', error);
+    // Puedes añadir más detalles al mensaje de error en la respuesta para el frontend
     res.status(500).json({
-      mensaje: 'Error al obtener clientes',
-      error: error.message
+      mensaje: 'Error interno del servidor al obtener clientes.',
+      error: error.message, // Envía el mensaje de error real para depuración
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined // Solo en desarrollo
     });
   }
 };
 
-exports.obtenerClientePorId = async (req, res) => {
+/**
+ * @desc Crear un nuevo perfil de cliente
+ * @route POST /api/clientes
+ * @access Admin
+ * @body {string} usuarioId - El ID del usuario asociado (debe tener rol 'cliente')
+ * @body {string} direccion
+ * @body {Date} [fechaNacimiento]
+ * @body {string[]} [preferenciasAlimentarias]
+ * @body {number} [puntos=0]
+ */
+exports.createCliente = async (req, res) => {
+  console.log('ClienteController: Intentando crear un nuevo cliente...');
   try {
-    const { id } = req.params;
-    const userRole = req.usuario.rol;
-    const userId = req.usuario._id; // ID del usuario autenticado
+    const { usuarioId, direccion, fechaNacimiento, preferenciasAlimentarias, puntos } = req.body;
 
-    const cliente = await Cliente.findById(id);
-    if (!cliente) {
-      return res.status(404).json({ mensaje: 'Cliente no encontrado' });
+    if (!usuarioId || !direccion) {
+      return res.status(400).json({ mensaje: 'El usuarioId y la dirección son obligatorios para crear un perfil de cliente.' });
     }
 
-    // Lógica de autorización:
-    // - Administrador puede ver cualquier cliente.
-    // - Cliente solo puede ver su propio perfil.
-    // - Supervisor de Ventas puede ver cualquier cliente.
-    if (userRole === 'cliente') {
-      const usuarioAsociado = await Usuario.findById(userId);
-      if (!usuarioAsociado || !usuarioAsociado.clienteId || usuarioAsociado.clienteId.toString() !== id) {
-        return res.status(403).json({ mensaje: 'Acceso denegado. Solo puede ver su propio perfil de cliente.' });
+    // 1. Verificar si el usuarioId existe y tiene el rol 'cliente'
+    const usuarioExistente = await Usuario.findById(usuarioId).populate('rolId');
+    if (!usuarioExistente) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado con el ID proporcionado.' });
+    }
+    if (usuarioExistente.rolId.nombre !== 'cliente') {
+      return res.status(400).json({ mensaje: 'El usuario asociado debe tener el rol de "cliente".' });
+    }
+
+    // 2. Verificar si ya existe un perfil de cliente para este usuarioId
+    const clienteExistente = await Cliente.findOne({ usuarioId });
+    if (clienteExistente) {
+      return res.status(400).json({ mensaje: 'Ya existe un perfil de cliente asociado a este usuario.' });
+    }
+
+    const nuevoCliente = new Cliente({
+      usuarioId,
+      direccion,
+      fechaNacimiento: fechaNacimiento || null,
+      preferenciasAlimentarias: preferenciasAlimentarias || [],
+      puntos: puntos !== undefined ? puntos : 0
+    });
+
+    await nuevoCliente.save();
+    console.log('ClienteController: Perfil de cliente creado exitosamente:', nuevoCliente);
+
+    // Popula el usuario para devolver una respuesta más completa
+    const clienteConUsuario = await Cliente.findById(nuevoCliente._id).populate({
+      path: 'usuarioId',
+      select: 'username email nombre apellido telefono rolId',
+      populate: {
+        path: 'rolId',
+        select: 'nombre'
       }
-    } else if (!['admin', 'supervisor_ventas'].includes(userRole)) {
-      return res.status(403).json({ mensaje: 'Acceso denegado. No tiene permisos para ver perfiles de cliente.' });
+    });
+
+    res.status(201).json({ mensaje: 'Perfil de cliente creado exitosamente', cliente: clienteConUsuario });
+  } catch (error) {
+    console.error('ClienteController: Error al crear perfil de cliente:', error);
+    res.status(500).json({
+      mensaje: 'Error interno del servidor al crear el perfil de cliente.',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+/**
+ * @desc Obtener un perfil de cliente por ID
+ * @route GET /api/clientes/:id
+ * @access Admin, Cliente (para su propio perfil)
+ */
+exports.getClienteById = async (req, res) => {
+  console.log(`ClienteController: Intentando obtener cliente con ID: ${req.params.id}`);
+  try {
+    const cliente = await Cliente.findById(req.params.id).populate({
+      path: 'usuarioId',
+      select: 'username email nombre apellido telefono rolId',
+      populate: {
+        path: 'rolId',
+        select: 'nombre'
+      }
+    });
+
+    if (!cliente) {
+      console.log(`ClienteController: Cliente con ID ${req.params.id} no encontrado.`);
+      return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado.' });
     }
 
+    // Lógica de autorización: un cliente solo puede ver su propio perfil
+    // Un admin puede ver cualquier perfil
+    if (req.user && req.user.rol === 'cliente' && cliente.usuarioId._id.toString() !== req.user._id.toString()) {
+      console.warn(`ClienteController: Acceso denegado para usuario ${req.user._id} al perfil de cliente ${req.params.id}`);
+      return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para ver este perfil de cliente.' });
+    }
+
+    console.log('ClienteController: Cliente obtenido exitosamente:', cliente);
     res.status(200).json(cliente);
   } catch (error) {
+    console.error('ClienteController: Error al obtener cliente por ID:', error);
     if (error.name === 'CastError') {
-      return res.status(400).json({ mensaje: 'ID de cliente inválido.', detalle: error.message });
+      return res.status(400).json({ mensaje: 'ID de cliente inválido.' });
     }
-    console.error('Error al obtener cliente:', error);
     res.status(500).json({
-      mensaje: 'Error al obtener cliente',
-      error: error.message
+      mensaje: 'Error interno del servidor al obtener el perfil de cliente por ID.',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
 
-exports.actualizarCliente = async (req, res) => {
+/**
+ * @desc Actualizar un perfil de cliente por ID
+ * @route PUT /api/clientes/:id
+ * @access Admin, Cliente (para su propio perfil)
+ * @body {string} [direccion]
+ * @body {Date} [fechaNacimiento]
+ * @body {string[]} [preferenciasAlimentarias]
+ * @body {number} [puntos]
+ */
+exports.updateCliente = async (req, res) => {
+  console.log(`ClienteController: Intentando actualizar cliente con ID: ${req.params.id}`);
   try {
-    const { id } = req.params;
-    const userRole = req.usuario.rol;
-    const userId = req.usuario._id; // ID del usuario autenticado
+    const { direccion, fechaNacimiento, preferenciasAlimentarias, puntos } = req.body;
+    const cliente = await Cliente.findById(req.params.id).populate('usuarioId'); // Popula para la autorización
 
-    // Lógica de autorización:
-    // - Administrador puede actualizar cualquier cliente.
-    // - Cliente solo puede actualizar su propio perfil.
-    if (userRole === 'cliente') {
-      const usuarioAsociado = await Usuario.findById(userId);
-      if (!usuarioAsociado || !usuarioAsociado.clienteId || usuarioAsociado.clienteId.toString() !== id) {
-        return res.status(403).json({ mensaje: 'Acceso denegado. Solo puede actualizar su propio perfil de cliente.' });
-      }
-    } else if (userRole !== 'admin') { // Solo admin tiene permiso general
-      return res.status(403).json({ mensaje: 'Acceso denegado. No tiene permisos para actualizar perfiles de cliente.' });
-    }
-
-    const clienteActualizado = await Cliente.findByIdAndUpdate(id, req.body, {
-      new: true, // Devuelve el documento actualizado
-      runValidators: true // Corre las validaciones definidas en el esquema
-    });
-
-    if (!clienteActualizado) {
-      return res.status(404).json({
-        mensaje: 'Cliente no encontrado para actualizar'
-      });
-    }
-    res.status(200).json({
-      mensaje: 'Cliente actualizado exitosamente',
-      cliente: clienteActualizado
-    });
-  } catch (error) {
-    if (error.code === 11000) { // Error de duplicado (ej. email único)
-      return res.status(400).json({
-        mensaje: 'El email del cliente ya está registrado.'
-      });
-    }
-    if (error.name === 'CastError') {
-      return res.status(400).json({ mensaje: 'ID de cliente inválido.', detalle: error.message });
-    }
-    console.error('Error al actualizar el cliente:', error);
-    res.status(500).json({
-      mensaje: 'Error al actualizar el cliente',
-      error: error.message
-    });
-  }
-};
-
-exports.eliminarCliente = async (req, res) => {
-  // Solo el Administrador puede eliminar clientes.
-  if (req.usuario.rol !== 'admin') {
-    return res.status(403).json({ mensaje: 'Acceso denegado. Solo administradores pueden eliminar clientes.' });
-  }
-
-  try {
-    const clienteEliminado = await Cliente.findByIdAndDelete(req.params.id);
-    if (!clienteEliminado) {
-      return res.status(404).json({
-        mensaje: 'Cliente no encontrado para eliminar'
-      });
-    }
-    res.status(200).json({
-      mensaje: 'Cliente eliminado exitosamente'
-    });
-  } catch (error) {
-    if (error.name === 'CastError') {
-      return res.status(400).json({ mensaje: 'ID de cliente inválido.', detalle: error.message });
-    }
-    console.error('Error al eliminar el cliente:', error);
-    res.status(500).json({
-      mensaje: 'Error al eliminar el cliente',
-      error: error.message
-    });
-  }
-};
-
-// --- Operaciones Específicas de Cliente ---
-
-exports.obtenerHistorialPedidos = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userRole = req.usuario.rol;
-    const userId = req.usuario._id;
-
-    // Lógica de autorización:
-    // - Administrador o Supervisor de Ventas pueden ver cualquier historial.
-    // - Cliente solo puede ver su propio historial de pedidos.
-    if (userRole === 'cliente') {
-      const usuarioAsociado = await Usuario.findById(userId);
-      if (!usuarioAsociado || !usuarioAsociado.clienteId || usuarioAsociado.clienteId.toString() !== id) {
-        return res.status(403).json({ mensaje: 'Acceso denegado. Solo puede ver su propio historial de pedidos.' });
-      }
-    } else if (!['admin', 'supervisor_ventas'].includes(userRole)) {
-      return res.status(403).json({ mensaje: 'Acceso denegado. No tiene permisos para ver historial de pedidos de otros clientes.' });
-    }
-
-    const historial = await Pedido.find({ clienteId: id })
-      .populate('detalleProductos.productoId', 'nombre precio') // Puedes popular más campos si lo necesitas
-      .sort({ fechaPedido: -1 });
-
-    res.status(200).json({
-      mensaje: 'Historial de pedidos obtenido exitosamente.',
-      clienteId: id,
-      historial: historial,
-    });
-  } catch (error) {
-    if (error.name === 'CastError') {
-      return res.status(400).json({ mensaje: 'ID de cliente inválido.', detalle: error.message });
-    }
-    console.error('Error al obtener historial de pedidos:', error);
-    res.status(500).json({
-      mensaje: 'Error al obtener historial de pedidos',
-      error: error.message
-    });
-  }
-};
-
-exports.calcularDescuentoFidelidad = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userRole = req.usuario.rol;
-    const userId = req.usuario._id;
-
-    const cliente = await Cliente.findById(id);
     if (!cliente) {
-      return res.status(404).json({ mensaje: 'Cliente no encontrado' });
+      console.log(`ClienteController: Cliente con ID ${req.params.id} no encontrado para actualizar.`);
+      return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado.' });
     }
 
-    // Lógica de autorización:
-    // - Administrador o Supervisor de Ventas pueden calcular para cualquier cliente.
-    // - Cliente solo puede calcular para sí mismo.
-    if (userRole === 'cliente') {
-      const usuarioAsociado = await Usuario.findById(userId);
-      if (!usuarioAsociado || !usuarioAsociado.clienteId || usuarioAsociado.clienteId.toString() !== id) {
-        return res.status(403).json({ mensaje: 'Acceso denegado. Solo puede calcular descuento de fidelidad para su propio perfil.' });
+    // Lógica de autorización: un cliente solo puede actualizar su propio perfil
+    // Un admin puede actualizar cualquier perfil
+    if (req.user && req.user.rol === 'cliente' && cliente.usuarioId._id.toString() !== req.user._id.toString()) {
+      console.warn(`ClienteController: Acceso denegado para usuario ${req.user._id} al actualizar perfil de cliente ${req.params.id}`);
+      return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para actualizar este perfil de cliente.' });
+    }
+
+    if (direccion) cliente.direccion = direccion;
+    if (fechaNacimiento) cliente.fechaNacimiento = fechaNacimiento;
+    if (preferenciasAlimentarias) cliente.preferenciasAlimentarias = preferenciasAlimentarias;
+    if (puntos !== undefined) cliente.puntos = puntos;
+
+    await cliente.save();
+    console.log('ClienteController: Perfil de cliente actualizado exitosamente:', cliente);
+
+    // Popula el usuario para devolver una respuesta más completa
+    const clienteActualizado = await Cliente.findById(cliente._id).populate({
+      path: 'usuarioId',
+      select: 'username email nombre apellido telefono rolId',
+      populate: {
+        path: 'rolId',
+        select: 'nombre'
       }
-    } else if (!['admin', 'supervisor_ventas'].includes(userRole)) {
-      return res.status(403).json({ mensaje: 'Acceso denegado. No tiene permisos para calcular descuentos de fidelidad.' });
-    }
-
-    // Asumiendo que `calcularDescuentoFidelidad` es un método en el esquema del modelo Cliente
-    // Ejemplo simple:
-    // schema.methods.calcularDescuentoFidelidad = function() {
-    //   if (this.puntos >= 100) return 0.10; // 10% de descuento
-    //   return 0;
-    // };
-    const descuento = cliente.calcularDescuentoFidelidad ? cliente.calcularDescuentoFidelidad() : 0;
-
-    res.status(200).json({
-      mensaje: 'Descuento de fidelidad calculado',
-      puntos: cliente.puntos,
-      descuentoAplicable: descuento, // Por ejemplo, 0.10 para 10%
     });
+
+    res.status(200).json({ mensaje: 'Perfil de cliente actualizado exitosamente', cliente: clienteActualizado });
   } catch (error) {
+    console.error('ClienteController: Error al actualizar cliente:', error);
     if (error.name === 'CastError') {
-      return res.status(400).json({ mensaje: 'ID de cliente inválido.', detalle: error.message });
+      return res.status(400).json({ mensaje: 'ID de cliente inválido.' });
     }
-    console.error('Error al calcular descuento de fidelidad:', error);
     res.status(500).json({
-      mensaje: 'Error al calcular descuento de fidelidad',
-      error: error.message
+      mensaje: 'Error interno del servidor al actualizar el perfil de cliente.',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
+
+/**
+ * @desc Eliminar un perfil de cliente por ID
+ * @route DELETE /api/clientes/:id
+ * @access Admin
+ */
+exports.deleteCliente = async (req, res) => {
+  console.log(`ClienteController: Intentando eliminar cliente con ID: ${req.params.id}`);
+  try {
+    const cliente = await Cliente.findById(req.params.id);
+
+    if (!cliente) {
+      console.log(`ClienteController: Cliente con ID ${req.params.id} no encontrado para eliminar.`);
+      return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado.' });
+    }
+
+    // Opcional: Considerar qué hacer con el usuario asociado.
+    // Si el usuario no tiene otros roles, ¿debería ser eliminado o desactivado?
+    // Por ahora, solo elimina el perfil de cliente.
+    await Cliente.deleteOne({ _id: req.params.id });
+    console.log('ClienteController: Perfil de cliente eliminado exitosamente.');
+    res.status(200).json({ mensaje: 'Perfil de cliente eliminado exitosamente' });
+  } catch (error) {
+    console.error('ClienteController: Error al eliminar cliente:', error);
+    if (error.name === 'CastError') {
+      return res.status(400).json({ mensaje: 'ID de cliente inválido.' });
+    }
+    res.status(500).json({
+      mensaje: 'Error interno del servidor al eliminar el perfil de cliente.',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+// NOTA: Las funciones para 'obtenerHistorialPedidos' y 'calcularDescuentoFidelidad'
+// no están incluidas en este controlador ya que no estaban definidas en el modelo Cliente
+// ni en las rutas que proporcionaste inicialmente. Si necesitas estas funcionalidades,
+// deberás implementarlas en el modelo y luego en este controlador.

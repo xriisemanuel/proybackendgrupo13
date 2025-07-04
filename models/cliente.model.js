@@ -2,34 +2,19 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const clienteSchema = new Schema({
-  nombre: {
-    type: String,
-    required: true,
-    trim: true,
+  usuarioId: { // Enlace al usuario que tiene el rol de "cliente"
+    type: Schema.Types.ObjectId,
+    ref: 'Usuario', // Referencia al modelo de Usuario
+    unique: true, // Un usuario solo puede tener un perfil de cliente
+    required: [true, 'El ID de usuario asociado es obligatorio para el perfil de cliente.']
   },
-  apellido: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  telefono: {
-    type: String,
-    trim: true,
-    match: /^\+?[1-9]\d{1,14}$/, // Validación básica de formato de teléfono (E.164)
-    required: true, // El teléfono es obligatorio
-  },
-  email: {
-    type: String,
-    required: true,
-    unique: true, // Cada email de cliente debe ser único
-    trim: true,
-    lowercase: true,
-    match: /^\S+@\S+\.\S+$/, // Validación básica de formato de email
-  },
+  // Los campos 'nombre', 'apellido', 'telefono', 'email' NO se duplican aquí.
+  // Se obtendrán del modelo 'Usuario' a través de la referencia 'usuarioId' cuando sea necesario.
+
   direccion: {
     type: String,
     trim: true,
-    required: true, // La dirección es obligatoria
+    required: true, // La dirección es obligatoria para el perfil de cliente
   },
   fechaNacimiento: {
     type: Date,
@@ -49,7 +34,7 @@ const clienteSchema = new Schema({
 // --- Métodos de instancia o estáticos para el modelo (si necesitas lógica específica) ---
 
 // Método de instancia para calcular descuento de fidelidad
-clienteSchema.methods.calcularDescuentoFidelidad = function() {
+clienteSchema.methods.calcularDescuentoFidelidad = function () {
   // Ejemplo: 10% de descuento por cada 1000 puntos
   if (this.puntos >= 1000) {
     const porcentajeDescuento = Math.floor(this.puntos / 1000) * 0.10; // 10% por cada 1000 puntos

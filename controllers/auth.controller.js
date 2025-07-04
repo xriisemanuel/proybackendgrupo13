@@ -1,20 +1,40 @@
-const Usuario = require('../models/usuario'); // Asegúrate de que la ruta sea correcta
+// controllers/auth.controller.js
+const Usuario = require('../models/usuario');
 const Cliente = require('../models/cliente.model'); // Asegúrate de que la ruta sea correcta
-const Rol = require('../models/rol');       // Asegúrate de que la ruta sea correcta
-const Repartidor = require('../models/Repartidor'); // Asegúrate de que la ruta sea correcta
+const Repartidor = require('../models/Repartidor');
+const Rol = require('../models/rol');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
 /**
- * @desc Registra un nuevo usuario en el sistema.
+ * @desc Registra un nuevo usuario en el sistema, creando también su perfil de rol específico si aplica.
  * @route POST /api/auth/register
  * @access Public
+ * @body {string} username
+ * @body {string} password
+ * @body {string} email
+ * @body {string} telefono
+ * @body {string} rolName - El nombre del rol deseado (ej. 'cliente', 'repartidor', 'admin')
+ * @body {string} nombre - Nombre del usuario
+ * @body {string} apellido - Apellido del usuario
+ *
+ * @body {string} [direccionCliente] - Opcional, si el rol es 'cliente'
+ * @body {Date} [fechaNacimientoCliente] - Opcional, si el rol es 'cliente'
+ * @body {string[]} [preferenciasAlimentariasCliente] - Opcional, si el rol es 'cliente'
+ * @body {number} [puntosCliente] - Opcional, si el rol es 'cliente'
+ *
+ * @body {string} [vehiculoRepartidor] - Opcional, si el rol es 'repartidor'
+ * @body {string} [numeroLicenciaRepartidor] - Opcional, si el rol es 'repartidor'
  */
 exports.registerUser = async (req, res) => {
   try {
-    const { username, password, email, telefono, rolName, nombre, apellido } = req.body;
+    const {
+      username, password, email, telefono, rolName, nombre, apellido,
+      direccionCliente, fechaNacimientoCliente, preferenciasAlimentariasCliente, puntosCliente,
+      vehiculoRepartidor, numeroLicenciaRepartidor
+    } = req.body;
 
     // Validar que los campos mínimos estén presentes
     if (!username || !password || !email || !rolName || !nombre || !apellido) {
@@ -28,12 +48,12 @@ exports.registerUser = async (req, res) => {
     }
 
     // 2. Buscar el rol por su nombre
-    const foundRol = await Rol.findOne({ nombre: rolName.toLowerCase() }); // Asegúrate de buscar el rol en minúsculas
+    const foundRol = await Rol.findOne({ nombre: rolName.toLowerCase() }); // Asegurarse de buscar en minúsculas
     if (!foundRol) {
       return res.status(400).json({ mensaje: `Rol no válido: '${rolName}'. Los roles permitidos son: admin, cliente, supervisor_cocina, supervisor_ventas, repartidor.` });
     }
 
-    // 3. Hashear la contraseña
+    // 3. Hashear la contraseña antes de guardarla
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 4. Crear el nuevo usuario
@@ -43,49 +63,42 @@ exports.registerUser = async (req, res) => {
       email,
       telefono: telefono || null,
       rolId: foundRol._id,
-      estado: true,
+      estado: true, // Por defecto, el usuario está activo
       nombre,
       apellido
     });
 
-    // 5. Si el rol es 'cliente', crear un registro en la colección Cliente y vincularlo
-    // NOTA: Esta lógica se mantiene para el rol 'cliente'.
+    // 5. Crear el perfil de rol específico y vincularlo al usuario
     if (foundRol.nombre === 'cliente') {
+      // Validar que la dirección sea obligatoria para el cliente aquí también
+      if (!direccionCliente) {
+        return res.status(400).json({ mensaje: 'La dirección es obligatoria para el rol de cliente.' });
+      }
       const newCliente = new Cliente({
-        nombre: nombre,
-        apellido: apellido,
-        telefono: telefono,
-        email,
-        direccion: '',
-        fechaNacimiento: null,
-        preferenciasAlimentarias: [],
-        puntos: 0
+        usuarioId: newUsuario._id, // <--- ¡Vincular al ID del Usuario recién creado!
+        direccion: direccionCliente,
+        fechaNacimiento: fechaNacimientoCliente || null,
+        preferenciasAlimentarias: preferenciasAlimentariasCliente || [],
+        puntos: puntosCliente || 0
       });
       await newCliente.save();
-      newUsuario.clienteId = newCliente._id;
-    }
-
-    await newUsuario.save(); // Guarda el usuario antes de intentar crear el perfil de repartidor
-
-    // 6. Si el rol es 'repartidor', crear un perfil de Repartidor y vincularlo
-    if (foundRol.nombre === 'repartidor') {
+      newUsuario.clienteId = newCliente._id; // Vincular el ObjectId del Cliente al Usuario
+    } else if (foundRol.nombre === 'repartidor') {
       const newRepartidor = new Repartidor({
-        usuarioId: newUsuario._id, // Vincula el perfil de repartidor al ID del usuario
+        usuarioId: newUsuario._id, // Vincular al ID del Usuario recién creado
         estado: 'disponible', // Estado inicial por defecto
-        vehiculo: '', // Puedes pedir esto en el frontend si es necesario
-        numeroLicencia: '' // Puedes pedir esto en el frontend si es necesario
-        // Los campos nombre, apellido, telefono, email no se duplican aquí,
-        // se obtienen del modelo Usuario a través de la referencia.
+        vehiculo: vehiculoRepartidor || '',
+        numeroLicencia: numeroLicenciaRepartidor || ''
+        // ubicacionActual, historialEntregas, calificacionPromedio se inicializan por defecto en el modelo
       });
       await newRepartidor.save();
-      console.log('Perfil de Repartidor creado para el usuario:', newUsuario.username);
+      // No es necesario vincular repartidorId en el modelo Usuario,
+      // ya que el modelo Repartidor ya hace referencia al Usuario.
     }
 
-    // Para otros roles (admin, supervisor_cocina, supervisor_ventas),
-    // no se necesita un perfil adicional en colecciones separadas
-    // según los modelos actuales. La creación del Usuario es suficiente.
+    await newUsuario.save();
 
-    // 7. Generar el JWT
+    // 6. Generar el JWT
     const token = jwt.sign(
       { _id: newUsuario._id, rol: foundRol.nombre },
       JWT_SECRET,
@@ -93,21 +106,21 @@ exports.registerUser = async (req, res) => {
     );
 
     res.status(201).json({
-      mensaje: 'Usuario registrado exitosamente',
+      mensaje: 'Usuario y perfil de rol creado exitosamente',
       token,
       usuario: {
         id: newUsuario._id,
         username: newUsuario.username,
         email: newUsuario.email,
-        rol: foundRol.nombre,
         nombre: newUsuario.nombre,
-        apellido: newUsuario.apellido
+        apellido: newUsuario.apellido,
+        rol: foundRol.nombre // Devolver el nombre del rol
       }
     });
 
   } catch (error) {
-    console.error('Error en el registro de usuario:', error);
-    res.status(500).json({ mensaje: 'Error al registrar el usuario.', error: error.message });
+    console.error('Error en el registro de usuario (adaptable):', error);
+    res.status(500).json({ mensaje: 'Error al registrar el usuario y su perfil.', error: error.message });
   }
 };
 
@@ -120,30 +133,25 @@ exports.loginUser = async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // Verificar que se proporcionen ambos campos
     if (!username || !password) {
       return res.status(400).json({ mensaje: 'Se requiere nombre de usuario y contraseña para iniciar sesión.' });
     }
 
-    // 1. Buscar el usuario por nombre de usuario
     const user = await Usuario.findOne({ username }).populate('rolId');
 
     if (!user) {
       return res.status(400).json({ mensaje: 'Credenciales inválidas.' });
     }
 
-    // 2. Comparar la contraseña proporcionada con la hasheada en la DB
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ mensaje: 'Credenciales inválidas.' });
     }
 
-    // 3. Verificar si la cuenta de usuario está activa
     if (!user.estado) {
       return res.status(403).json({ mensaje: 'La cuenta de usuario está inactiva. Por favor, contacte al soporte.' });
     }
 
-    // 4. Generar el JWT
     const token = jwt.sign(
       { _id: user._id, rol: user.rolId.nombre },
       JWT_SECRET,
