@@ -1,12 +1,12 @@
 // controllers/auth.controller.js
 const Usuario = require('../models/usuario');
-const Cliente = require('../models/cliente.model'); // Asegúrate de que la ruta sea correcta
+const Cliente = require('../models/cliente.model');
 const Repartidor = require('../models/Repartidor');
 const Rol = require('../models/rol');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || 'tu_secreto_jwt_aqui'; // Usar una variable de entorno o un valor por defecto
 
 /**
  * @desc Registra un nuevo usuario en el sistema, creando también su perfil de rol específico si aplica.
@@ -15,7 +15,8 @@ const JWT_SECRET = process.env.JWT_SECRET;
  * @body {string} username
  * @body {string} password
  * @body {string} email
- * @body {string} telefono
+ *
+ * @body {string} [telefono] - Opcional
  * @body {string} rolName - El nombre del rol deseado (ej. 'cliente', 'repartidor', 'admin')
  * @body {string} nombre - Nombre del usuario
  * @body {string} apellido - Apellido del usuario
@@ -44,7 +45,9 @@ exports.registerUser = async (req, res) => {
     // 1. Verificar si el nombre de usuario o el email ya existen
     let userExists = await Usuario.findOne({ $or: [{ username }, { email }] });
     if (userExists) {
-      return res.status(400).json({ mensaje: 'El nombre de usuario o el email ya están en uso.' });
+      // Mensaje más específico si el duplicado es username o email
+      let duplicateField = userExists.username === username ? 'nombre de usuario' : 'email';
+      return res.status(400).json({ mensaje: `El ${duplicateField} '${username === userExists.username ? username : email}' ya está en uso.` });
     }
 
     // 2. Buscar el rol por su nombre
@@ -61,7 +64,7 @@ exports.registerUser = async (req, res) => {
       username,
       password: hashedPassword,
       email,
-      telefono: telefono || null,
+      telefono: telefono || null, // Si el frontend envía vacío, se guarda como null
       rolId: foundRol._id,
       estado: true, // Por defecto, el usuario está activo
       nombre,
@@ -83,7 +86,9 @@ exports.registerUser = async (req, res) => {
       });
       await newCliente.save();
       newUsuario.clienteId = newCliente._id; // Vincular el ObjectId del Cliente al Usuario
+      await newUsuario.save(); // Guardar el usuario después de vincular el perfil
     } else if (foundRol.nombre === 'repartidor') {
+      // Validar campos obligatorios para repartidor si es necesario aquí (ej. vehiculo, numeroLicencia)
       const newRepartidor = new Repartidor({
         usuarioId: newUsuario._id, // Vincular al ID del Usuario recién creado
         estado: 'disponible', // Estado inicial por defecto
@@ -92,11 +97,12 @@ exports.registerUser = async (req, res) => {
         // ubicacionActual, historialEntregas, calificacionPromedio se inicializan por defecto en el modelo
       });
       await newRepartidor.save();
-      // No es necesario vincular repartidorId en el modelo Usuario,
-      // ya que el modelo Repartidor ya hace referencia al Usuario.
+      newUsuario.repartidorId = newRepartidor._id; // Asegurado que se asigna
+      await newUsuario.save(); // Guardar el usuario después de vincular el perfil
+    } else {
+      // Si no es cliente ni repartidor (ej. admin, supervisor), solo guarda el usuario
+      await newUsuario.save();
     }
-
-    await newUsuario.save();
 
     // 6. Generar el JWT
     const token = jwt.sign(
@@ -120,6 +126,32 @@ exports.registerUser = async (req, res) => {
 
   } catch (error) {
     console.error('Error en el registro de usuario (adaptable):', error);
+    // Manejo específico para errores de duplicidad de clave de MongoDB
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      const value = error.keyValue[field];
+      // Mensaje más amigable y genérico para el frontend, sin mencionar "sparse"
+      let message = `El campo '${field}' con valor '${value}' ya está en uso.`;
+      if (field === 'username') {
+        message = `El nombre de usuario '${value}' ya está registrado.`;
+      } else if (field === 'email') {
+        message = `El email '${value}' ya está registrado.`;
+      } else if (field === 'clienteId' && value === null) {
+        // Este caso no debería ocurrir si sparse:true funciona correctamente.
+        // Si ocurre, es un problema de configuración de índice o datos.
+        message = 'Error de base de datos: Conflicto al crear el usuario. Un campo de perfil opcional ya existe con valor nulo.';
+      } else if (field === 'repartidorId' && value === null) {
+        // Este caso no debería ocurrir si sparse:true funciona correctamente.
+        // Si ocurre, es un problema de configuración de índice o datos.
+        message = 'Error de base de datos: Conflicto al crear el usuario. Un campo de perfil opcional ya existe con valor nulo.';
+      }
+      return res.status(400).json({ mensaje: message, error });
+    }
+    // Manejo de errores de validación de Mongoose
+    if (error.name === 'ValidationError') {
+      let messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({ mensaje: 'Error de validación: ' + messages.join(', '), error });
+    }
     res.status(500).json({ mensaje: 'Error al registrar el usuario y su perfil.', error: error.message });
   }
 };

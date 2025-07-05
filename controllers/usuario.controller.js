@@ -1,258 +1,195 @@
-const Usuario = require('../models/usuario'); // Asegúrate de que la ruta sea correcta
-const Rol = require('../models/rol');       // Necesario para buscar roles por nombre
-const Cliente = require('../models/cliente.model'); // Necesario si el rol es 'cliente'
-const bcrypt = require('bcryptjs'); // Para hashear y comparar contraseñas
+const Usuario = require('../models/usuario');
+const Rol = require('../models/rol'); // Asegúrate de que la ruta sea correcta
+const Cliente = require('../models/cliente.model'); // Asegúrate de importar el modelo Cliente
+const Repartidor = require('../models/Repartidor'); // Asegúrate de importar el modelo Repartidor
+const bcrypt = require('bcryptjs'); // Aunque no se usa directamente aquí, se mantiene por si acaso
 
 /**
- * @desc Obtener todos los usuarios
- * @route GET /api/usuario
- * @access Admin
+ * Función auxiliar para poblar los perfiles específicos del usuario.
+ * @param {mongoose.Query} query La consulta de Mongoose.
+ * @returns {mongoose.Query} La consulta con populate.
  */
-exports.getUsuarios = async (req, res) => {
-  try {
-    // Popula el campo rolId para obtener el objeto completo del rol
-    // Y popula clienteId si es necesario mostrar datos del cliente.
-    const usuarios = await Usuario.find({})
-      .populate('rolId')
-      .populate('clienteId');
-    res.status(200).json(usuarios);
-  } catch (error) {
-    console.error('Error al obtener usuarios:', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor al obtener usuarios.', error: error.message });
-  }
+const populateUserProfiles = (query) => {
+    return query
+        .populate('rolId', 'nombre') // Popula el rol para obtener el nombre
+        .populate({
+            path: 'clienteId', // Popula el perfil de cliente si existe
+            model: 'Cliente', // Especifica el modelo para clienteId
+            select: 'direccion fechaNacimiento preferenciasAlimentarias puntos' // Campos del perfil de cliente
+        })
+        .populate({
+            path: 'repartidorId', // Popula el perfil de repartidor si existe
+            model: 'Repartidor', // Especifica el modelo para repartidorId
+            select: 'estado vehiculo numeroLicencia' // Campos del perfil de repartidor
+        });
 };
 
 /**
- * @desc Crear un nuevo usuario (para uso de administradores)
- * @route POST /api/usuario
+ * @desc Obtener todos los usuarios
+ * @route GET /api/usuarios
  * @access Admin
- * @body {string} username
- * @body {string} password
- * @body {string} email
- * @body {string} telefono
- * @body {string} rolName - Nombre del rol (ej. 'admin', 'cliente', 'repartidor')
- * @body {string} nombre
- * @body {string} apellido
- * @body {string} [nombreCliente] - Opcional, si el rol es 'cliente'
- * @body {string} [apellidoCliente] - Opcional, si el rol es 'cliente'
  */
-exports.createUsuario = async (req, res) => {
-  try {
-    const { username, password, email, telefono, rolName, nombre, apellido, nombreCliente, apellidoCliente } = req.body;
-
-    // Validar campos obligatorios
-    if (!username || !password || !email || !telefono || !rolName || !nombre || !apellido) {
-      return res.status(400).json({ mensaje: 'Todos los campos obligatorios (username, password, email, telefono, rolName, nombre, apellido) deben ser proporcionados.' });
+exports.getUsuarios = async (req, res) => {
+    try {
+        // Usamos la función auxiliar para poblar los perfiles
+        const usuarios = await populateUserProfiles(Usuario.find({}).select('-password')); // No enviamos el password
+        res.status(200).json(usuarios);
+    } catch (error) {
+        console.error('Error al obtener usuarios:', error);
+        res.status(500).json({ mensaje: 'Error interno del servidor al obtener usuarios.', error: error.message });
     }
-
-    // 1. Verificar si el username o email ya existen
-    let userExists = await Usuario.findOne({ $or: [{ username }, { email }] });
-    if (userExists) {
-      return res.status(400).json({ mensaje: 'El nombre de usuario o el email ya están en uso.' });
-    }
-
-    // 2. Buscar el rol por su nombre
-    const foundRol = await Rol.findOne({ nombre: rolName.toLowerCase() }); // Asegúrate de buscar en minúsculas
-    if (!foundRol) {
-      return res.status(400).json({ mensaje: `Rol no válido: '${rolName}'.` });
-    }
-
-    // 3. Hashear la contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 4. Crear el nuevo usuario
-    let newUsuario = new Usuario({
-      username,
-      password: hashedPassword,
-      email,
-      telefono,
-      nombre,
-      apellido,
-      rolId: foundRol._id, // Asigna el ObjectId del rol
-      estado: true // Por defecto, el usuario está activo
-    });
-
-    // 5. Si el rol es 'cliente', crear un registro en la colección Cliente y vincularlo
-    if (foundRol.nombre === 'cliente') {
-      const newCliente = new Cliente({
-        nombre: nombreCliente || nombre,
-        apellido: apellidoCliente || apellido,
-        telefono: telefono,
-        email,
-        direccion: '',
-        fechaNacimiento: null,
-        preferenciasAlimentarias: [],
-        puntos: 0
-      });
-      await newCliente.save();
-      newUsuario.clienteId = newCliente._id; // Vincular el ObjectId del Cliente al Usuario
-    }
-
-    await newUsuario.save();
-
-    // Popula el rol para la respuesta
-    await newUsuario.populate('rolId');
-
-    res.status(201).json({ mensaje: 'Usuario creado exitosamente', usuario: newUsuario });
-  } catch (error) {
-    console.error('Error al crear usuario:', error);
-    if (error.code === 11000) { // Error de clave duplicada de MongoDB
-      return res.status(400).json({ mensaje: 'El nombre de usuario o email ya existen.' });
-    }
-    res.status(500).json({ mensaje: 'Error interno del servidor al crear el usuario.', error: error.message });
-  }
 };
 
 /**
  * @desc Obtener un usuario por ID
- * @route GET /api/usuario/:id
- * @access Authenticated (Admin, o el propio usuario)
+ * @route GET /api/usuarios/:id
+ * @access Admin, Propietario del perfil
  */
 exports.getUsuarioById = async (req, res) => {
-  try {
-    // Popula el campo rolId para obtener el objeto completo del rol
-    const usuario = await Usuario.findById(req.params.id).populate('rolId');
-    if (!usuario) {
-      return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
-    }
+    try {
+        // Usamos la función auxiliar para poblar los perfiles
+        const usuario = await populateUserProfiles(Usuario.findById(req.params.id).select('-password')); // No enviamos el password
 
-    // Lógica de autorización:
-    // Un administrador puede ver cualquier usuario.
-    // Un usuario normal solo puede ver su propio perfil.
-    if (req.user && req.user.rol !== 'admin' && req.user._id.toString() !== usuario._id.toString()) {
-      return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para ver este perfil de usuario.' });
-    }
+        if (!usuario) {
+            return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
+        }
 
-    res.status(200).json(usuario);
-  } catch (error) {
-    console.error('Error al obtener usuario por ID:', error);
-    if (error.name === 'CastError') {
-      return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+        // Lógica de autorización (si req.user está disponible desde un middleware de autenticación)
+        // Un usuario solo puede ver su propio perfil, un admin puede ver cualquiera
+        if (req.user && req.user.rol !== 'admin' && req.user._id.toString() !== usuario._id.toString()) {
+            return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para ver este perfil de usuario.' });
+        }
+
+        res.status(200).json(usuario);
+    } catch (error) {
+        console.error('Error al obtener usuario por ID:', error);
+        if (error.name === 'CastError') {
+            return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+        }
+        res.status(500).json({ mensaje: 'Error interno del servidor al obtener el usuario por ID.', error: error.message });
     }
-    res.status(500).json({ mensaje: 'Error interno del servidor al obtener el usuario por ID.', error: error.message });
-  }
 };
 
 /**
  * @desc Actualizar un usuario por ID
- * @route PUT /api/usuario/:id
- * @access Authenticated (Admin, o el propio usuario)
- * @body {string} [username]
- * @body {string} [password]
- * @body {string} [email]
- * @body {string} [telefono]
- * @body {boolean} [estado]
- * @body {string} [rolName] - Para cambiar el rol (solo admin)
- * @body {string} [nombre]
- * @body {string} [apellido]
+ * @route PUT /api/usuarios/:id
+ * @access Admin, Propietario del perfil
  */
 exports.updateUsuario = async (req, res) => {
-  try {
-    const { username, password, email, telefono, estado, rolName, nombre, apellido } = req.body;
-    const usuario = await Usuario.findById(req.params.id).populate('rolId'); // Popula para autorización
+    try {
+        const { id } = req.params;
+        const { username, email, nombre, apellido, telefono, estado,
+                 direccionCliente, fechaNacimientoCliente, preferenciasAlimentariasCliente, puntosCliente,
+                 vehiculoRepartidor, numeroLicenciaRepartidor } = req.body;
 
-    if (!usuario) {
-      return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
-    }
+        const usuario = await Usuario.findById(id).populate('rolId'); // Popula el rol para verificarlo
+        if (!usuario) {
+            return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
+        }
 
-    // Lógica de autorización:
-    // Un administrador puede actualizar cualquier usuario.
-    // Un usuario normal solo puede actualizar su propio perfil (excepto el rol).
-    if (req.user && req.user.rol !== 'admin' && req.user._id.toString() !== usuario._id.toString()) {
-      return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para actualizar este perfil de usuario.' });
-    }
+        // Lógica de autorización
+        if (req.user && req.user.rol !== 'admin' && req.user._id.toString() !== usuario._id.toString()) {
+            return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para actualizar este perfil de usuario.' });
+        }
 
-    // Actualizar campos si se proporcionan
-    if (username && username !== usuario.username) {
-      const usernameExists = await Usuario.findOne({ username });
-      if (usernameExists && usernameExists._id.toString() !== usuario._id.toString()) {
-        return res.status(400).json({ mensaje: 'El nombre de usuario ya está en uso.' });
-      }
-      usuario.username = username;
-    }
+        // Validar si el username o email ya existen para otro usuario
+        if (username && username !== usuario.username) {
+            const usernameExists = await Usuario.findOne({ username });
+            if (usernameExists && usernameExists._id.toString() !== usuario._id.toString()) {
+                return res.status(400).json({ mensaje: 'Este nombre de usuario ya está en uso.' });
+            }
+        }
+        if (email && email !== usuario.email) {
+            const emailExists = await Usuario.findOne({ email });
+            if (emailExists && emailExists._id.toString() !== usuario._id.toString()) {
+                return res.status(400).json({ mensaje: 'Este email ya está en uso.' });
+            }
+        }
 
-    if (email && email !== usuario.email) {
-      const emailExists = await Usuario.findOne({ email });
-      if (emailExists && emailExists._id.toString() !== usuario._id.toString()) {
-        return res.status(400).json({ mensaje: 'El email ya está en uso.' });
-      }
-      usuario.email = email;
-    }
+        // Actualizar campos comunes del Usuario
+        if (username) usuario.username = username;
+        if (email) usuario.email = email;
+        if (nombre) usuario.nombre = nombre;
+        if (apellido) usuario.apellido = apellido;
+        if (telefono !== undefined) usuario.telefono = telefono; // Permite null o vacío
+        if (estado !== undefined) usuario.estado = estado; // Permite cambiar el estado
 
-    if (password) {
-      usuario.password = await bcrypt.hash(password, 10); // Hashear nueva contraseña
-    }
-    if (telefono) usuario.telefono = telefono;
-    if (nombre) usuario.nombre = nombre;
-    if (apellido) usuario.apellido = apellido;
-    if (estado !== undefined && req.user.rol === 'admin') { // Solo admin puede cambiar el estado
-      usuario.estado = estado;
-    }
+        // NO SE PERMITE CAMBIAR EL ROL DEL USUARIO EN ESTA RUTA DE ACTUALIZACIÓN
+        // if (rolId) usuario.rolId = rolId; // Esta línea no debe existir aquí
 
-    // Cambiar rol (solo si es admin y se proporciona un rolName diferente)
-    if (rolName && req.user.rol === 'admin' && rolName.toLowerCase() !== usuario.rolId.nombre) {
-      const newRol = await Rol.findOne({ nombre: rolName.toLowerCase() });
-      if (!newRol) {
-        return res.status(400).json({ mensaje: `Rol '${rolName}' no válido.` });
-      }
-      usuario.rolId = newRol._id;
+        await usuario.save(); // Guarda los cambios en el usuario
 
-      // Lógica adicional si el rol cambia a/de 'cliente'
-      if (newRol.nombre === 'cliente' && !usuario.clienteId) {
-        const newCliente = new Cliente({
-          nombre: usuario.nombre,
-          apellido: usuario.apellido,
-          telefono: usuario.telefono,
-          email: usuario.email
-        });
-        await newCliente.save();
-        usuario.clienteId = newCliente._id;
-      } else if (newRol.nombre !== 'cliente' && usuario.clienteId) {
-        usuario.clienteId = null;
-      }
-    }
+        // Lógica para actualizar perfiles específicos (Cliente o Repartidor)
+        if (usuario.rolId && usuario.rolId.nombre === 'cliente') {
+            let clientePerfil = await Cliente.findOne({ usuarioId: usuario._id });
+            if (clientePerfil) {
+                if (direccionCliente !== undefined) clientePerfil.direccion = direccionCliente; // Permite vaciar
+                if (fechaNacimientoCliente !== undefined) clientePerfil.fechaNacimiento = fechaNacimientoCliente; // Permite vaciar
+                if (preferenciasAlimentariasCliente !== undefined) clientePerfil.preferenciasAlimentarias = preferenciasAlimentariasCliente; // Permite vaciar
+                if (puntosCliente !== undefined) clientePerfil.puntos = puntosCliente;
+                await clientePerfil.save();
+            }
+        } else if (usuario.rolId && usuario.rolId.nombre === 'repartidor') {
+            let repartidorPerfil = await Repartidor.findOne({ usuarioId: usuario._id });
+            if (repartidorPerfil) {
+                if (vehiculoRepartidor !== undefined) repartidorPerfil.vehiculo = vehiculoRepartidor; // Permite vaciar
+                if (numeroLicenciaRepartidor !== undefined) repartidorPerfil.numeroLicencia = numeroLicenciaRepartidor; // Permite vaciar
+                // No se actualiza el estado del repartidor desde aquí, debe ser a través de su propia lógica de negocio
+                await repartidorPerfil.save();
+            }
+        }
 
-    await usuario.save();
-    // Popula el rol para la respuesta final
-    await usuario.populate('rolId');
-
-    res.status(200).json({ mensaje: 'Usuario actualizado exitosamente', usuario });
-  } catch (error) {
-    console.error('Error al actualizar usuario:', error);
-    if (error.name === 'CastError') {
-      return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+        // Volver a obtener el usuario con los perfiles populados para la respuesta
+        const usuarioActualizado = await populateUserProfiles(Usuario.findById(id).select('-password'));
+        res.status(200).json({ mensaje: 'Usuario y perfil(es) actualizado(s) exitosamente', usuario: usuarioActualizado });
+    } catch (error) {
+        console.error('Error al actualizar usuario:', error);
+        if (error.name === 'CastError') {
+            return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+        }
+        if (error.code === 11000) { // Error de clave duplicada de MongoDB
+            return res.status(400).json({ mensaje: 'El username o email ya está en uso.' });
+        }
+        // Manejo de errores de validación de Mongoose
+        if (error.name === 'ValidationError') {
+            let messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ mensaje: 'Error de validación: ' + messages.join(', '), error });
+        }
+        res.status(500).json({ mensaje: 'Error interno del servidor al actualizar el usuario.', error: error.message });
     }
-    if (error.code === 11000) { // Error de clave duplicada
-      return res.status(400).json({ mensaje: 'El nombre de usuario o email ya existen.' });
-    }
-    res.status(500).json({ mensaje: 'Error interno del servidor al actualizar el usuario.', error: error.message });
-  }
 };
 
 /**
  * @desc Eliminar un usuario por ID
- * @route DELETE /api/usuario/:id
+ * @route DELETE /api/usuarios/:id
  * @access Admin
  */
 exports.deleteUsuario = async (req, res) => {
-  try {
-    const usuario = await Usuario.findById(req.params.id);
+    try {
+        const usuario = await Usuario.findById(req.params.id).populate('rolId');
+        if (!usuario) {
+            return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
+        }
 
-    if (!usuario) {
-      return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
-    }
+        // Lógica de autorización: solo un admin puede eliminar usuarios
+        if (req.user && req.user.rol !== 'admin') {
+            return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para eliminar usuarios.' });
+        }
 
-    if (usuario.clienteId) {
-      await Cliente.deleteOne({ _id: usuario.clienteId });
-    }
+        // Eliminar perfiles asociados si existen
+        if (usuario.rolId && usuario.rolId.nombre === 'cliente' && usuario.clienteId) {
+            await Cliente.deleteOne({ _id: usuario.clienteId });
+        } else if (usuario.rolId && usuario.rolId.nombre === 'repartidor' && usuario.repartidorId) {
+            await Repartidor.deleteOne({ _id: usuario.repartidorId });
+        }
 
-    await Usuario.deleteOne({ _id: req.params.id });
-    res.status(200).json({ mensaje: 'Usuario eliminado exitosamente' });
-  } catch (error) {
-    console.error('Error al eliminar usuario:', error);
-    if (error.name === 'CastError') {
-      return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+        await Usuario.deleteOne({ _id: req.params.id });
+        res.status(200).json({ mensaje: 'Usuario y perfiles asociados eliminados exitosamente.' });
+    } catch (error) {
+        console.error('Error al eliminar usuario:', error);
+        if (error.name === 'CastError') {
+            return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+        }
+        res.status(500).json({ mensaje: 'Error interno del servidor al eliminar el usuario.', error: error.message });
     }
-    res.status(500).json({ mensaje: 'Error interno del servidor al eliminar el usuario.', error: error.message });
-  }
 };

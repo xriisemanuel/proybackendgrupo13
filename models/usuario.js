@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
-const Rol = require('../models/rol'); // Asegúrate de que el modelo Rol esté definido correctamente
-const Cliente = require('../models/cliente.model'); // Asegúrate de que el modelo Cliente esté definido correctamente
+const Rol = require('./rol'); // Asegúrate de que la ruta sea correcta
+const Cliente = require('./cliente.model'); // Asegúrate de que la ruta sea correcta
+const Repartidor = require('./Repartidor'); // Asegúrate de que la ruta sea correcta
 
 const usuarioSchema = new Schema({
   username: {
@@ -18,7 +19,7 @@ const usuarioSchema = new Schema({
   email: {
     type: String,
     required: true,
-    unique: true, // Asegura que no haya emails duplicados
+    unique: true, // Mantenemos unique para email, ya que cada usuario debe tener un email único
     trim: true,
     lowercase: true,
     match: /^\S+@\S+\.\S+$/, // Validación básica de formato de email
@@ -26,8 +27,8 @@ const usuarioSchema = new Schema({
   telefono: {
     type: String,
     trim: true,
+    required: false, // <--- ¡CRÍTICO! Ahora es opcional para que coincida con el frontend si no es requerido.
     match: /^\+?[1-9]\d{1,14}$/, // Validación básica de formato de teléfono (E.164)
-    required: true,
   },
   estado: {
     type: Boolean,
@@ -51,8 +52,19 @@ const usuarioSchema = new Schema({
   clienteId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Cliente', // Referencia a un modelo de Cliente (si existe)
-    default: null, // Opcional, si el usuario puede no estar asociado a un cliente específico
+    //default: null, // Opcional, si el usuario puede no estar asociado a un cliente específico
+    unique: true, // Un usuario solo puede tener un perfil de cliente
+    sparse: true // <--- ¡CRÍTICO! Permite valores nulos para unique en este campo
   },
+  repartidorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Repartidor', // Referencia a un modelo de Repartidor
+    //default: null, // Opcional, si el usuario puede no estar asociado a un repartidor específico
+    unique: true, // Un usuario solo puede tener un perfil de repartidor
+    sparse: true // <--- ¡CRÍTICO! Permite valores nulos para unique en este campo
+  },
+}, {
+  timestamps: true // Esto añade campos `createdAt` y `updatedAt` automáticamente
 });
 
 // Método para comparar contraseñas

@@ -1,21 +1,11 @@
-    const express = require('express');
-    const router = express.Router();
-    const usuarioController = require('../controllers/usuario.controller');
-    // const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
+const express = require('express');
+const router = express.Router();
+const usuarioController = require('../controllers/usuario.controller');
 
-    // Rutas para la gestión de usuarios (CRUD)
-    // Estas rutas deberían estar protegidas por un middleware de autenticación y autorización
-    router.post('/', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ usuarioController.createUsuario); // Usar createUsuario
-    router.get('/', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'editor']),*/ usuarioController.getUsuarios); // Usar getUsuarios
-    router.get('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'editor', 'usuario']),*/ usuarioController.getUsuarioById); // Usar getUsuarioById
-    router.put('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'usuario']),*/ usuarioController.updateUsuario); // Usar updateUsuario
-    router.delete('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ usuarioController.deleteUsuario); // Usar deleteUsuario
+// Rutas para la gestión de usuarios
+router.get('/', usuarioController.getUsuarios); // Obtener todos los usuarios
+router.get('/:id', usuarioController.getUsuarioById); // Obtener un usuario por ID
+router.put('/:id', usuarioController.updateUsuario); // Actualizar un usuario por ID
+router.delete('/:id', usuarioController.deleteUsuario); // Eliminar un usuario por ID
 
-    // Las rutas de autenticación (login, logout, recuperar-password, cambiar-password)
-    // DEBEN estar en auth.routes.js y ser manejadas por auth.controller.js.
-    // Si las necesitas, asegúrate de que estén definidas allí.
-    // router.post('/login', authController.loginUser); // Ejemplo de dónde debería estar
-    // router.post('/register', authController.registerUser); // Ejemplo de dónde debería estar
-
-    module.exports = router;
-    
+module.exports = router;
