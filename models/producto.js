@@ -8,7 +8,7 @@ const productoSchema = new Schema({
         unique: true, // El nombre del producto debe ser único
         trim: true,
         minlength: [3, 'El nombre del producto debe tener al menos 3 caracteres.'],
-        maxlength: [100, 'El nombre del producto no puede exceder los 100 caracteres.'],
+        maxlength: [1000, 'El nombre del producto no puede exceder los 100 caracteres.'],
     },
     descripcion: {
         type: String,
