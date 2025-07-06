@@ -301,3 +301,33 @@ exports.registrarEntregaRepartidor = async (req, res) => {
         res.status(500).json({ mensaje: 'Error interno del servidor al registrar la entrega del repartidor.', error: error.message });
     }
 };
+exports.getRepartidorByUsuarioId = async (req, res) => {
+    try {
+        const { usuarioId } = req.params;
+        const repartidor = await Repartidor.findOne({ usuarioId }).populate({
+            path: 'usuarioId',
+            select: 'username email nombre apellido telefono rolId',
+            populate: {
+                path: 'rolId',
+                select: 'nombre'
+            }
+        });
+
+        if (!repartidor) {
+            return res.status(404).json({ mensaje: 'Perfil de repartidor no encontrado para el usuario dado.' });
+        }
+
+        // Opcional: Reforzar la autorización si req.user está disponible
+        if (req.user && req.user.rol === 'repartidor' && repartidor.usuarioId._id.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para ver este perfil de repartidor.' });
+        }
+
+        res.status(200).json(repartidor);
+    } catch (error) {
+        console.error('Error al obtener repartidor por usuarioId:', error);
+        if (error.name === 'CastError') {
+            return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+        }
+        res.status(500).json({ mensaje: 'Error interno del servidor al obtener el repartidor por usuarioId.', error: error.message });
+    }
+};
