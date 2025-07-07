@@ -101,3 +101,52 @@ calificacionSchema.methods.calcularPuntuacionPromedio = function() {
 const Calificacion = mongoose.model('Calificacion', calificacionSchema);
 
 module.exports = Calificacion;
+
+// const mongoose = require('mongoose');
+
+// const CalificacionSchema = new mongoose.Schema({
+//   pedidoId: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: 'Pedido',
+//     required: true
+//   },
+//   clienteId: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: 'Cliente',
+//     required: true
+//   },
+//   puntuacionComida: {
+//     type: Number,
+//     required: true,
+//     min: 1,
+//     max: 5
+//   },
+//   puntuacionServicio: {
+//     type: Number,
+//     required: false,
+//     min: 1,
+//     max: 5
+//   },
+//   puntuacionEntrega: {
+//     type: Number,
+//     required: false,
+//     min: 1,
+//     max: 5
+//   },
+//   comentario: {
+//     type: String,
+//     maxlength: 300
+//   },
+//   calificacionProductos: [
+//     {
+//       productoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Producto' },
+//       puntaje: { type: Number, min: 1, max: 5 }
+//     }
+//   ],
+//   fechaCalificacion: {
+//     type: Date,
+//     default: Date.now
+//   }
+// });
+
+// module.exports = mongoose.model('Calificacion', CalificacionSchema);
