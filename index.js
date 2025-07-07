@@ -50,7 +50,7 @@ app.use('/api/usuario', autenticar, autorizar(['admin']), usuarioRoutes);
 // - 'admin': Acceso completo a todos los pedidos.
 // La lógica granular de qué puede hacer cada rol sobre los pedidos específicos debe estar en el controlador de Pedidos.
 // Aquí se define qué roles tienen acceso general a las rutas de pedidos.
-app.use('/api/pedido', autenticar, autorizar(['admin', 'cliente', 'repartidor', 'supervisor_cocina']), pedidoRoutes);
+app.use('/api/pedido', autenticar, autorizar(['admin', 'cliente', 'repartidor', 'supervisor_cocina', 'supervisor_ventas']), pedidoRoutes);
 
 // Rutas de Ventas: Accesible por Administrador y Supervisor de Ventas
 // Permite la gestión y visualización de ventas.
