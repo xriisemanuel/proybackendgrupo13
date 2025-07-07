@@ -1,6 +1,7 @@
-// middleware/auth.js
+// proyecto/backend/middleware/auth.js
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || '1234567890'; // Usar la misma clave secreta
+// Asegúrate de que JWT_SECRET esté definido en tu archivo .env
+const JWT_SECRET = process.env.JWT_SECRET || '1234567890'; // ¡CAMBIA ESTO EN PRODUCCIÓN!
 
 exports.autenticar = (req, res, next) => {
     const token = req.header('Authorization');
@@ -12,23 +13,26 @@ exports.autenticar = (req, res, next) => {
     try {
         const tokenLimpio = token.replace('Bearer ', '');
         const verificado = jwt.verify(tokenLimpio, JWT_SECRET);
-        req.usuario = verificado; // ¡Aquí es donde la información del usuario del token se hace disponible!
+        // Aquí se adjunta la información del usuario decodificada al objeto req
+        // Asegúrate de que tu JWT incluya _id y rol (nombre del rol)
+        req.usuario = verificado;
         next();
     } catch (error) {
-        res.status(400).json({ mensaje: 'Token inválido o expirado.' });
+        // En caso de token inválido o expirado
+        res.status(400).json({ mensaje: 'Token inválido o expirado.', error: error.message });
     }
 };
 
 exports.autorizar = (rolesPermitidos) => {
     return (req, res, next) => {
+        // req.usuario debe haber sido establecido por el middleware 'autenticar'
         if (!req.usuario || !req.usuario.rol) {
-            return res.status(403).json({ mensaje: 'Acceso denegado. No hay información de rol.' });
+            return res.status(403).json({ mensaje: 'Acceso denegado. Información de rol no disponible.' });
         }
 
-        // Asumiendo que `req.usuario.rol` es el valor del rol (ej. 'admin', 'user')
-        // Si `req.usuario.rol` es un ID, necesitarías una lógica para mapearlo a un nombre de rol.
+        // Verifica si el rol del usuario está en la lista de roles permitidos
         if (!rolesPermitidos.includes(req.usuario.rol)) {
-            return res.status(403).json({ mensaje: 'Acceso denegado. No tiene los permisos necesarios.' });
+            return res.status(403).json({ mensaje: 'Acceso denegado. No tiene los permisos necesarios para esta acción.' });
         }
         next();
     };

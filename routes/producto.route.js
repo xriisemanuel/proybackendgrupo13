@@ -1,19 +1,17 @@
+// proyecto/backend/routes/producto.route.js
 const express = require('express');
 const router = express.Router();
-const productoController = require('../controllers/producto.controller');
-// const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
+const productController = require('../controllers/producto.controller'); // <<<< Usamos el controlador de productos
 
-// Rutas CRUD para Productos
-router.post('/', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'empleado']),*/ productoController.createProducto);
-router.get('/', /*authMiddleware.autenticar,*/ productoController.getProductos);
-router.get('/:id', /*authMiddleware.autenticar,*/ productoController.getProducto);
-router.put('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'empleado']),*/ productoController.editProducto);
-router.delete('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ productoController.deleteProducto);
+// Rutas GET de productos (accesibles públicamente si index.js las configura así)
+// No necesitan middlewares aquí, ya que se aplicarán en index.js si la ruta es protegida.
+router.get('/', productController.getProducts); // Obtener todos los productos
+router.get('/:id', productController.getProductById); // Obtener un producto por ID
 
-// Rutas de funcionalidades específicas de Productos
-router.get('/categoria/:categoriaId', /*authMiddleware.autenticar,*/ productoController.getProductoPorCategoria); // Más específico: productos de una categoría
-router.get('/:id/disponibilidad', /*authMiddleware.autenticar,*/ productoController.verificarDisponibilidadProducto);
-router.patch('/:id/stock', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'empleado']),*/ productoController.actualizarStockProducto);
-router.patch('/:id/popularidad/increment', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'empleado']),*/ productoController.aumentarPopularidad); // Para incrementar popularidad
+// Rutas POST, PUT, DELETE de productos (protegidas por middleware en index.js)
+// No necesitan middlewares aquí, ya que se aplicarán en index.js.
+router.post('/', productController.createProduct); // Crear un nuevo producto
+router.put('/:id', productController.updateProduct); // Actualizar un producto
+router.delete('/:id', productController.deleteProduct); // Eliminar un producto
 
 module.exports = router;
