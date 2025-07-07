@@ -5,7 +5,7 @@ const cors = require('cors');
 const mongoose = require('./database'); // Asegúrate de que './database.js' maneje la conexión a MongoDB
 
 // Importar los middlewares de autenticación y autorización
-const { autenticar, autorizar } = require('./middleware/auth');
+const { autenticar, autorizar } = require('./middleware/auth'); // Asegúrate que exporte estas funciones
 
 // Importar todas las rutas
 const authRoutes = require('./routes/auth.routes');
@@ -20,7 +20,7 @@ const comboRoutes = require('./routes/combo.routes');
 const ofertaRoutes = require('./routes/oferta.routes');
 const repartidorRoutes = require('./routes/repartidor.routes');
 const clienteRoutes = require('./routes/cliente.routes');
-const imageGenerationRoutes = require('./routes/imageGeneration.routes');
+const imageGenerationRoutes = require('./routes/imageGeneration.routes'); // Importa el router de generación de imágenes
 
 var app = express();
 
@@ -30,9 +30,6 @@ app.use(cors({ origin: 'http://localhost:4200' }));
 
 // --- Rutas de Autenticación (Públicas) ---
 app.use('/api/auth', authRoutes);
-
-// --- Rutas de Generación de Imágenes (Protegidas por su propio router/middleware interno) ---
-app.use('/api', imageGenerationRoutes); // Esta ruta se protege en 'imageGeneration.routes.js'
 
 // --- Rutas Protegidas por Rol ---
 // Aquí aplicamos los middlewares de autenticación y autorización a todo el router importado.
@@ -67,16 +64,20 @@ app.use('/api/combos', autenticar, autorizar(['admin']), comboRoutes);
 app.use('/api/ofertas', autenticar, autorizar(['admin', 'supervisor_ventas']), ofertaRoutes);
 
 // Rutas de Repartidores: Acceso granular en controlador.
-// ¡¡¡ESTA ES LA LÍNEA CLAVE!!! Asegúrate de que solo esta exista para /api/repartidores
 app.use('/api/repartidores', autenticar, autorizar(['admin', 'repartidor', 'supervisor_ventas']), repartidorRoutes);
 
 // Rutas de Clientes: Acceso granular en controlador.
 app.use('/api/cliente', autenticar, autorizar(['admin', 'cliente']), clienteRoutes);
 
-// Rutas para la generación de imágenes (si está activa y protegida)
-// Si imageGenerationRoutes no es un router válido, esta línea causará el error.
-// Asegúrate de que imageGeneration.routes.js exporte un express.Router()
-//app.use('/api', autenticar, imageGenerationRoutes); 
+// --- Rutas de Generación de Imágenes ---
+// Se monta el router de imageGeneration en /api y se protege directamente con autenticar
+// y, opcionalmente, con autorizar si solo roles específicos pueden generar imágenes.
+// La ruta interna en imageGeneration.routes.js es '/generate-image'
+// Esto resultará en la ruta completa: POST /api/generate-image
+app.use('/api', autenticar, imageGenerationRoutes); // Protege el router con autenticación. Puedes añadir autorizar si solo admin, por ejemplo.
+// Ejemplo si solo admin pudiera generarlas:
+// app.use('/api', autenticar, autorizar(['admin']), imageGenerationRoutes);
+
 
 // Configuración del puerto y arranque del servidor
 app.set('port', process.env.PORT || 3000);
