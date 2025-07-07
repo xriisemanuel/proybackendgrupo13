@@ -34,23 +34,12 @@ app.use(cors({ origin: 'http://localhost:4200' }));
 // --- Rutas de Autenticación (Públicas) ---
 app.use('/api/auth', authRoutes);
 
-// --- Rutas de Generación de Imágenes (Protegidas a nivel de su propio router) ---
-// La autenticación se aplica dentro de imageGeneration.routes.js
-app.use('/api', imageGenerationRoutes);
-
 // --- Rutas PÚBLICAS (Accesibles sin autenticación) ---
-// Permite que cualquiera vea categorías, productos, combos, ofertas sin iniciar sesión.
-app.get('/api/categorias', categoriaRoutes); // Listar todas las categorías
-app.get('/api/categorias/:id', categoriaRoutes); // Ver una categoría por ID
-
-app.get('/api/productos', productoRoutes); // Listar todos los productos
-app.get('/api/productos/:id', productoRoutes); // Ver un producto por ID
-
-app.get('/api/combos', comboRoutes); // Listar todos los combos
-app.get('/api/combos/:id', comboRoutes); // Ver un combo por ID
-
-app.get('/api/ofertas', ofertaRoutes); // Listar todas las ofertas
-app.get('/api/ofertas/:id', ofertaRoutes); // Ver una oferta por ID
+// Estas rutas app.get que pasaban routers directamente han sido eliminadas
+// para resolver el "TypeError: argument handler must be a function" y evitar conflictos.
+// Si necesitas rutas públicas para listar, deben ser manejadas dentro de sus
+// respectivos routers o definidas de forma más granular aquí.
+// Por ahora, asumimos que las rutas debajo son las que controlan el acceso.
 
 
 // --- Rutas PROTEGIDAS (Necesitan autenticación y autorización por roles) ---
@@ -68,14 +57,14 @@ app.use('/api/pedido', autenticar, autorizar(['admin', 'cliente', 'repartidor', 
 // Rutas de Ventas: Accesible por Administrador y Supervisor de Ventas
 app.use('/api/ventas', autenticar, autorizar(['admin', 'supervisor_ventas']), ventaRoutes);
 
-// Rutas de Calificaciones: Solo accesible por Clientes (para calificar sus propios pedidos)
-app.use('/api/calificaciones', autenticar, autorizar(['cliente']), calificacionRoutes);
+// Rutas de Calificaciones: Solo accesible por Clientes, Admin y Supervisor de Ventas
+app.use('/api/calificaciones', autenticar, autorizar(['cliente', 'admin', 'supervisor_ventas']), calificacionRoutes);
 
 // Rutas de Gestión de Categorías (CRUD completo): Solo Administrador
 app.use('/api/categorias', autenticar, autorizar(['admin']), categoriaRoutes);
 
 // Rutas de Gestión de Productos (CRUD completo): Solo Administrador
-app.use('/api/productos', autenticar, autorizar(['admin']), productoRoutes); // <<<<< Usando productoRoutes
+app.use('/api/productos', autenticar, autorizar(['admin']), productoRoutes);
 
 // Rutas de Gestión de Combos: Solo Administrador
 app.use('/api/combos', autenticar, autorizar(['admin']), comboRoutes);
@@ -84,10 +73,16 @@ app.use('/api/combos', autenticar, autorizar(['admin']), comboRoutes);
 app.use('/api/ofertas', autenticar, autorizar(['admin', 'supervisor_ventas']), ofertaRoutes);
 
 // Rutas de Repartidores: Acceso granular en controlador.
-app.use('/api/repartidores', autenticar, autorizar(['admin', 'repartidor']), repartidorRoutes);
+// ¡¡¡ESTA ES LA LÍNEA CLAVE!!! Asegúrate de que solo esta exista para /api/repartidores
+app.use('/api/repartidores', autenticar, autorizar(['admin', 'repartidor', 'supervisor_ventas']), repartidorRoutes);
 
 // Rutas de Clientes: Acceso granular en controlador.
 app.use('/api/cliente', autenticar, autorizar(['admin', 'cliente']), clienteRoutes);
+
+// Rutas para la generación de imágenes (si está activa y protegida)
+// Si imageGenerationRoutes no es un router válido, esta línea causará el error.
+// Asegúrate de que imageGeneration.routes.js exporte un express.Router()
+//app.use('/api', autenticar, imageGenerationRoutes); 
 
 // Configuración del puerto y arranque del servidor
 app.set('port', process.env.PORT || 3000);
