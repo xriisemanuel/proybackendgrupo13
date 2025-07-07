@@ -32,7 +32,7 @@ app.use(cors({ origin: 'http://localhost:4200' }));
 app.use('/api/auth', authRoutes);
 
 // --- Rutas de Generación de Imágenes (Protegidas por su propio router/middleware interno) ---
-app.use('/api', imageGenerationRoutes); // Esta ruta se protege en 'imageGeneration.routes.js'
+//app.use('/api', imageGenerationRoutes); // Esta ruta se protege en 'imageGeneration.routes.js'
 
 // --- Rutas Protegidas por Rol ---
 // Aquí aplicamos los middlewares de autenticación y autorización a todo el router importado.
@@ -52,7 +52,7 @@ app.use('/api/pedido', autenticar, autorizar(['admin', 'cliente', 'repartidor', 
 app.use('/api/ventas', autenticar, autorizar(['admin', 'supervisor_ventas']), ventaRoutes);
 
 // Rutas de Calificaciones: Solo accesible por Clientes
-app.use('/api/calificaciones', autenticar, autorizar(['cliente']), calificacionRoutes);
+app.use('/api/calificaciones', autenticar, autorizar(['cliente', 'supervisor_ventas', 'admin']), calificacionRoutes);
 
 // Rutas de Gestión de Categorías (CRUD completo): Solo Administrador
 app.use('/api/categorias', autenticar, autorizar(['admin']), categoriaRoutes);
