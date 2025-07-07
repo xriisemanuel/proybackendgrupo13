@@ -63,7 +63,7 @@ app.use('/api/rol', autenticar, autorizar(['admin']), rolRoutes);
 app.use('/api/usuario', autenticar, autorizar(['admin']), usuarioRoutes);
 
 // Rutas de Pedidos: Acceso granular en controlador.
-app.use('/api/pedido', autenticar, autorizar(['admin', 'cliente', 'repartidor', 'supervisor_cocina']), pedidoRoutes);
+app.use('/api/pedido', autenticar, autorizar(['admin', 'cliente', 'repartidor', 'supervisor_cocina', 'supervisor_ventas']), pedidoRoutes);
 
 // Rutas de Ventas: Accesible por Administrador y Supervisor de Ventas
 app.use('/api/ventas', autenticar, autorizar(['admin', 'supervisor_ventas']), ventaRoutes);
