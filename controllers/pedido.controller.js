@@ -114,45 +114,76 @@ exports.crearPedido = async (req, res) => {
 };
 
 exports.listarPedidos = async (req, res) => {
-  try {
-    let query = {};
+    try {
+        let query = {}; // Objeto base para los filtros de la consulta a la BD
 
-    // Lógica de autorización para listar pedidos
-    const userRole = req.usuario.rol;
-    const userId = req.usuario._id; // ID del usuario autenticado
+        // Lógica de autorización y filtrado inicial por rol
+        const userRole = req.usuario.rol;
+        const userId = req.usuario._id; // ID del usuario autenticado
 
-    if (userRole === 'cliente') {
-      // Un cliente solo puede ver sus propios pedidos
-      const usuarioAutenticado = await Usuario.findById(userId);
-      if (!usuarioAutenticado || !usuarioAutenticado.clienteId) {
-        return res.status(403).json({ mensaje: 'No se pudo asociar un cliente válido para ver pedidos.' });
-      }
-      query.clienteId = usuarioAutenticado.clienteId;
-    } else if (userRole === 'repartidor') {
-      // Un repartidor solo puede ver los pedidos que le han sido asignados
-      const repartidorAsociado = await Repartidor.findOne({ usuarioId: userId });
-      if (!repartidorAsociado) {
-        return res.status(403).json({ mensaje: 'No se pudo asociar un repartidor válido para ver pedidos.' });
-      }
-      query.repartidorId = repartidorAsociado._id;
-    } else if (!['admin', 'supervisor_cocina', 'supervisor_ventas'].includes(userRole)) {
-      // Otros roles no especificados no tienen acceso directo a listar todos los pedidos
-      return res.status(403).json({ mensaje: 'Acceso denegado. No tiene permisos para listar pedidos.' });
+        if (userRole === 'cliente') {
+            const usuarioAutenticado = await Usuario.findById(userId);
+            if (!usuarioAutenticado || !usuarioAutenticado.clienteId) {
+                return res.status(403).json({ mensaje: 'No se pudo asociar un cliente válido para ver pedidos.' });
+            }
+            query.clienteId = usuarioAutenticado.clienteId;
+        } else if (userRole === 'repartidor') {
+            const repartidorAsociado = await Repartidor.findOne({ usuarioId: userId });
+            if (!repartidorAsociado) {
+                return res.status(403).json({ mensaje: 'No se pudo asociar un repartidor válido para ver pedidos.' });
+            }
+            query.repartidorId = repartidorAsociado._id;
+        } else if (!['admin', 'supervisor_cocina', 'supervisor_ventas'].includes(userRole)) {
+            // Otros roles no especificados no tienen acceso directo a listar todos los pedidos
+            return res.status(403).json({ mensaje: 'Acceso denegado. No tiene permisos para listar pedidos.' });
+        }
+
+        // --- AÑADIMOS LA LÓGICA DE FILTRADO POR QUERY PARAMS ---
+        // Esto permite que roles con acceso general (admin, supervisores) o el mismo repartidor
+        // puedan solicitar filtros adicionales.
+        // Si el rol ya impuso un filtro (clienteId o repartidorId), se combinará con los query params.
+
+        // Filtrar por repartidorId desde query param (útil para admin/supervisores o depuración)
+        // NOTA: Si el usuario es un 'repartidor', su ID de repartidor ya fue añadido a 'query.repartidorId' arriba.
+        // Este if solo aplicaría si un admin/supervisor está buscando pedidos de UN repartidor específico.
+        if (req.query.repartidorId && userRole !== 'repartidor') { // Evita sobreescribir si ya se filtró por el repartidor logueado
+            query.repartidorId = req.query.repartidorId;
+        }
+
+        // Filtrar por estados (ej. ?estados=en_envio,confirmado)
+        // El frontend enviará esto como `?estados=confirmado,en_preparacion,en_envio`
+        if (req.query.estados) {
+            const estadosArray = req.query.estados.split(',');
+            // Usamos $in para buscar cualquiera de los estados en el array
+            query.estado = { $in: estadosArray };
+        }
+
+        // También considera otros filtros que ya tienes en getPedidosFiltrados
+        // Por ejemplo, clienteId, fechaDesde, fechaHasta, si quieres que listarPedidos los soporte también.
+        // Para este caso específico del repartidor, solo nos interesan repartidorId y estados.
+
+        const pedidos = await Pedido.find(query)
+            .populate({ // Populamos clienteId y su usuarioId anidado
+                path: 'clienteId',
+                select: 'usuarioId', // Solo selecciona el usuarioId del cliente
+                populate: {
+                    path: 'usuarioId', // Luego populas el usuarioId dentro del cliente
+                    select: 'nombre apellido email' // Selecciona los campos necesarios del usuario
+                }
+            })
+            // Asegúrate de que esta población también incluya 'nombre', 'apellido', etc.
+            // si los necesitas en el frontend, como en tu interfaz IRepartidorPopulated.
+            // Actualmente tienes 'nombre' y 'apellido' en RepartidorService, pero aquí solo populas 'nombre'.
+            .populate('repartidorId', 'nombre apellido telefono'); // Añade 'apellido' y 'telefono' aquí
+
+        res.status(200).json(pedidos);
+    } catch (error) {
+        console.error('Error al listar pedidos:', error);
+        res.status(500).json({
+            mensaje: 'Error interno del servidor al listar pedidos',
+            error: error.message
+        });
     }
-    // Si es admin, supervisor_cocina o supervisor_ventas, pueden ver todos los pedidos (o usar filtros en getPedidosFiltrados)
-
-
-    const pedidos = await Pedido.find(query)
-      .populate('clienteId', 'nombre apellido email telefono')
-      .populate('repartidorId', 'nombre apellido telefono');
-    res.status(200).json(pedidos);
-  } catch (error) {
-    console.error('Error al listar pedidos:', error);
-    res.status(500).json({
-      mensaje: 'Error interno del servidor al listar pedidos',
-      error: error.message
-    });
-  }
 };
 
 exports.obtenerPedidoPorId = async (req, res) => {
