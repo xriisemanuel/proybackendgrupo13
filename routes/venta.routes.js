@@ -23,43 +23,43 @@ module.exports = router;
 
 
 
-const express = require('express');
-const router = express.Router();
+// const express = require('express');
+// const router = express.Router();
 
-const {
-  crearVenta,
-  obtenerVentas,
-  ventasPorCliente,
-  ventasPorFecha,
-  totalVentas,
-  procesarPago,
-  generarFactura,
-  confirmarPago
-} = require('../controllers/venta.controller');
+// const {
+//   crearVenta,
+//   obtenerVentas,
+//   ventasPorCliente,
+//   ventasPorFecha,
+//   totalVentas,
+//   procesarPago,
+//   generarFactura,
+//   confirmarPago
+// } = require('../controllers/venta.controller');
 
 
-// Crear una nueva venta
-router.post('/', crearVenta);
+// // Crear una nueva venta
+// router.post('/', crearVenta);
 
-// Obtener todas las ventas
-router.get('/', obtenerVentas);
+// // Obtener todas las ventas
+// router.get('/', obtenerVentas);
 
-// Obtener ventas por cliente
-router.get('/cliente/:clienteId', ventasPorCliente);
+// // Obtener ventas por cliente
+// router.get('/cliente/:clienteId', ventasPorCliente);
 
-// Filtrar ventas por fecha (query: desde=...&hasta=...)
-router.get('/fecha', ventasPorFecha);
+// // Filtrar ventas por fecha (query: desde=...&hasta=...)
+// router.get('/fecha', ventasPorFecha);
 
-// Obtener total vendido
-router.get('/total/general', totalVentas);
+// // Obtener total vendido
+// router.get('/total/general', totalVentas);
 
-// Procesar pago
-router.post('/:id/procesar-pago', procesarPago);
+// // Procesar pago
+// router.post('/:id/procesar-pago', procesarPago);
 
-// Generar factura
-router.post('/:id/generar-factura', generarFactura);
+// // Generar factura
+// router.post('/:id/generar-factura', generarFactura);
 
-// Confirmar pago
-router.post('/:id/confirmar-pago', confirmarPago);
+// // Confirmar pago
+// router.post('/:id/confirmar-pago', confirmarPago);
 
-module.exports = router;
+// module.exports = router;

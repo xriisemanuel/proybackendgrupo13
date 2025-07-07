@@ -57,45 +57,45 @@ const Venta = mongoose.model('Venta', ventaSchema);
 module.exports = Venta;
 
 
-const mongoose = require('mongoose');
+// const mongoose = require('mongoose');
 
-const VentaSchema = new mongoose.Schema({
-  pedidoId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Pedido',
-    required: true
-  },
-  clienteId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Cliente',
-    required: true
-  },
-  fechaVenta: {
-    type: Date,
-    default: Date.now
-  },
-  montoTotal: {
-    type: Number,
-    required: true
-  },
-  metodoPago: {
-  type: String,
-  enum: ['EFECTIVO', 'TARJETA', 'QR'],
-  required: true
-},
+// const VentaSchema = new mongoose.Schema({
+//   pedidoId: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: 'Pedido',
+//     required: true
+//   },
+//   clienteId: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: 'Cliente',
+//     required: true
+//   },
+//   fechaVenta: {
+//     type: Date,
+//     default: Date.now
+//   },
+//   montoTotal: {
+//     type: Number,
+//     required: true
+//   },
+//   metodoPago: {
+//   type: String,
+//   enum: ['EFECTIVO', 'TARJETA', 'QR'],
+//   required: true
+// },
 
-  numeroFactura: {
-    type: String,
-    required: true,
-    unique: true
-  },
-  estadoPago: {
-    type: String,
-    enum: ['pendiente', 'pagado'],
-    default: 'pendiente'
-  }
-}, {
-  timestamps: true
-});
+//   numeroFactura: {
+//     type: String,
+//     required: true,
+//     unique: true
+//   },
+//   estadoPago: {
+//     type: String,
+//     enum: ['pendiente', 'pagado'],
+//     default: 'pendiente'
+//   }
+// }, {
+//   timestamps: true
+// });
 
-module.exports = mongoose.model('Venta', VentaSchema);
+// module.exports = mongoose.model('Venta', VentaSchema);
