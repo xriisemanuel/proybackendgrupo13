@@ -26,11 +26,11 @@ const productoSchema = new Schema({
         ref: 'Categoria', // Referencia al modelo de Categoria
         required: [true, 'La categoría del producto es obligatoria.'],
     },
-    imagenes: [{ // Array de URLs de imágenes del producto
+    imagen: {
         type: String,
         trim: true,
         // Puedes añadir una validación regex para URL si es necesario
-    }],
+    },
     disponible: { // Indica si el producto está activo y visible para la venta
         type: Boolean,
         default: true,

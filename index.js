@@ -5,6 +5,7 @@ const cors = require('cors');
 const mongoose = require('./database'); // Asegúrate de que './database.js' maneje la conexión a MongoDB
 
 // Importar los middlewares de autenticación y autorización
+// Se importan aquí, pero su uso se ajusta en los archivos de rutas individuales para mayor granularidad.
 const { autenticar, autorizar } = require('./middleware/auth'); // Asegúrate que exporte estas funciones
 
 // Importar todas las rutas
@@ -25,8 +26,8 @@ const imageGenerationRoutes = require('./routes/imageGeneration.routes'); // Imp
 var app = express();
 
 // Middlewares globales
-app.use(express.json());
-app.use(cors({ origin: 'http://localhost:4200' }));
+app.use(express.json()); // Para parsear cuerpos de peticiones JSON
+app.use(cors({ origin: 'http://localhost:4200' })); // Configuración de CORS para permitir peticiones desde tu frontend
 
 // --- Rutas de Autenticación (Públicas) ---
 app.use('/api/auth', authRoutes);
@@ -51,11 +52,13 @@ app.use('/api/ventas', autenticar, autorizar(['admin', 'supervisor_ventas']), ve
 // Rutas de Calificaciones: Solo accesible por Clientes
 app.use('/api/calificaciones', autenticar, autorizar(['cliente']), calificacionRoutes);
 
-// Rutas de Gestión de Categorías (CRUD completo): Solo Administrador
-app.use('/api/categorias', autenticar, autorizar(['admin']), categoriaRoutes);
+// --- Rutas de Gestión de Categorías (AJUSTADO: Sin autenticación global aquí) ---
+// La autenticación se manejará dentro de 'categoria.routes.js' para GET/POST/PUT/DELETE
+app.use('/api/categorias', categoriaRoutes); // <-- Eliminado autenticar y autorizar aquí
 
-// Rutas de Gestión de Productos (CRUD completo): Solo Administrador
-app.use('/api/productos', autenticar, autorizar(['admin']), productoRoutes);
+// --- Rutas de Gestión de Productos (AJUSTADO: Sin autenticación global aquí) ---
+// La autenticación se manejará dentro de 'producto.route.js' para GET/POST/PUT/DELETE
+app.use('/api/productos', productoRoutes); // <-- Eliminado autenticar y autorizar aquí
 
 // Rutas de Gestión de Combos: Solo Administrador
 app.use('/api/combos', autenticar, autorizar(['admin']), comboRoutes);
@@ -70,14 +73,8 @@ app.use('/api/repartidores', autenticar, autorizar(['admin', 'repartidor', 'supe
 app.use('/api/cliente', autenticar, autorizar(['admin', 'cliente']), clienteRoutes);
 
 // --- Rutas de Generación de Imágenes ---
-// Se monta el router de imageGeneration en /api y se protege directamente con autenticar
-// y, opcionalmente, con autorizar si solo roles específicos pueden generar imágenes.
-// La ruta interna en imageGeneration.routes.js es '/generate-image'
-// Esto resultará en la ruta completa: POST /api/generate-image
-app.use('/api', autenticar, imageGenerationRoutes); // Protege el router con autenticación. Puedes añadir autorizar si solo admin, por ejemplo.
-// Ejemplo si solo admin pudiera generarlas:
-// app.use('/api', autenticar, autorizar(['admin']), imageGenerationRoutes);
-
+// Se mantiene la autenticación aquí para la generación de imágenes, ya que es una operación que modifica/consume recursos.
+app.use('/api', autenticar, imageGenerationRoutes); // Protege el router con autenticación.
 
 // Configuración del puerto y arranque del servidor
 app.set('port', process.env.PORT || 3000);
