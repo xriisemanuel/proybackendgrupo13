@@ -11,7 +11,7 @@ const Categoria = require('../models/categoria.model'); // Para validar categor�
  */
 exports.crearOferta = async (req, res) => {
   try {
-    const { nombre, descripcion, descuento, fechaInicio, fechaFin, productosAplicables, categoriasAplicables } = req.body;
+    const { nombre, descripcion, descuento, fechaInicio, fechaFin, productosAplicables, categoriasAplicables, imagen } = req.body;
 
     // Validar productosAplicables si se proporcionan
     if (productosAplicables && productosAplicables.length > 0) {
@@ -37,7 +37,8 @@ exports.crearOferta = async (req, res) => {
       fechaFin,
       productosAplicables: productosAplicables || [],
       categoriasAplicables: categoriasAplicables || [],
-      activa: true, // Las ofertas se crean activas por defecto
+      estado: true, // Las ofertas se crean activas por defecto
+      imagen: req.body.imagen || null // Imagen opcional
     });
 
     await nuevaOferta.save();
@@ -65,14 +66,14 @@ exports.crearOferta = async (req, res) => {
  * @route GET /api/ofertas
  * @desc Obtiene todas las ofertas (opcionalmente filtradas por estado o vigencia)
  * @access Público
- * @queryParam activa (boolean): true para activas, false para inactivas
+ * @queryParam estado (boolean): true para activas, false para inactivas
  * @queryParam vigente (boolean): true para ofertas actualmente vigentes
  */
 exports.obtenerOfertas = async (req, res) => {
   try {
     const query = {};
-    if (req.query.activa !== undefined) {
-      query.activa = req.query.activa === 'true';
+    if (req.query.estado !== undefined) {
+      query.estado = req.query.estado === 'true';
     }
 
     let ofertas = await Oferta.find(query)
@@ -223,10 +224,10 @@ exports.activarOferta = async (req, res) => {
         if (!oferta) {
             return res.status(404).json({ mensaje: 'Oferta no encontrada.' });
         }
-        if (oferta.activa) {
+        if (oferta.estado) {
             return res.status(200).json({ mensaje: 'La oferta ya está activa.', oferta });
         }
-        oferta.activa = true;
+        oferta.estado = true;
         await oferta.save();
         res.status(200).json({ mensaje: 'Oferta activada exitosamente.', oferta });
     } catch (error) {
@@ -250,10 +251,10 @@ exports.desactivarOferta = async (req, res) => {
         if (!oferta) {
             return res.status(404).json({ mensaje: 'Oferta no encontrada.' });
         }
-        if (!oferta.activa) {
+        if (!oferta.estado) {
             return res.status(200).json({ mensaje: 'La oferta ya está inactiva.', oferta });
         }
-        oferta.activa = false;
+        oferta.estado = false;
         await oferta.save();
         res.status(200).json({ mensaje: 'Oferta desactivada exitosamente.', oferta });
     } catch (error) {
@@ -286,7 +287,7 @@ exports.obtenerOfertasPorProducto = async (req, res) => {
     // 2. Sean vigentes (fechaInicio <= ahora <= fechaFin)
     // 3. Apliquen al producto específico O a la categoría del producto
     const ofertasAplicables = await Oferta.find({
-      activa: true,
+      estado: true,
       fechaInicio: { $lte: ahora },
       fechaFin: { $gte: ahora },
       $or: [

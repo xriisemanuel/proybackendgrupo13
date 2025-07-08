@@ -41,6 +41,11 @@ const ofertaSchema = new Schema({
     ref: 'Categoria',
     default: [], // Por defecto, un array vacío
   }],
+  imagen: { // URL de la imagen representativa del combo
+    type: String,
+    trim: true,
+    default: null,
+  },
   estado: { // Indica si la oferta está activa y vigente
     type: Boolean,
     default: true,
@@ -60,7 +65,7 @@ ofertaSchema.path('fechaFin').validate(function(value) {
  */
 ofertaSchema.methods.estaVigente = function() {
   const ahora = new Date();
-  return this.activa && (this.fechaInicio <= ahora) && (this.fechaFin >= ahora);
+  return this.estado && (this.fechaInicio <= ahora) && (this.fechaFin >= ahora);
 };
 
 /**

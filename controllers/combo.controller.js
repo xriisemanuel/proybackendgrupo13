@@ -10,15 +10,20 @@ const Producto = require('../models/producto'); // Necesario para validar produc
  */
 exports.crearCombo = async (req, res) => {
     try {
-        const { nombre, descripcion, productosIds, precioCombo, descuento, imagen } = req.body;
+        //const { nombre, descripcion, productosIds, precioCombo, descuento, imagen } = req.body;
+        const { nombre, descripcion, productos, descuento, imagen } = req.body;
 
         // 1. Validar que se hayan proporcionado productosIds y que sea un array
-        if (!productosIds || !Array.isArray(productosIds) || productosIds.length === 0) {
+        // if (!productosIds || !Array.isArray(productosIds) || productosIds.length === 0) {
+        //     return res.status(400).json({ mensaje: 'El combo debe contener al menos un producto.' });
+        // }
+        if (!productos || !Array.isArray(productos) || productos.length === 0) {
             return res.status(400).json({ mensaje: 'El combo debe contener al menos un producto.' });
         }
 
         // 2. Verificar que todos los productos existan y estén disponibles
         const productosExistentes = await Producto.find({ _id: { $in: productosIds } });
+        
         if (productosExistentes.length !== productosIds.length) {
             return res.status(404).json({ mensaje: 'Uno o más productos no fueron encontrados o no son válidos.' });
         }
@@ -32,26 +37,26 @@ exports.crearCombo = async (req, res) => {
 
         // Opcional: Calcular el precio sugerido si el precioCombo no se proporciona,
         // o validar que el descuento sea coherente.
-        const precioBaseProductos = productosExistentes.reduce((sum, prod) => sum + prod.precio, 0);
-        let precioFinalCombo = precioCombo;
-        let descuentoPorcentaje = descuento;
+        // const precioBaseProductos = productosExistentes.reduce((sum, prod) => sum + prod.precio, 0);
+        // let precioFinalCombo = precioCombo;
+        // let descuentoPorcentaje = descuento;
 
-        if (precioCombo === undefined && descuento !== undefined) {
-            // Si solo se da descuento, calcular el precio final
-            precioFinalCombo = precioBaseProductos * (1 - (descuento / 100));
-        } else if (precioCombo !== undefined && descuento === undefined) {
-            // Si solo se da precio final, calcular el descuento porcentual
-            if (precioBaseProductos > 0) {
-                descuentoPorcentaje = ((precioBaseProductos - precioCombo) / precioBaseProductos) * 100;
-                if (descuentoPorcentaje < 0) descuentoPorcentaje = 0; // No hay descuento, incluso si el precio es mayor
-            } else {
-                descuentoPorcentaje = 0;
-            }
-        } else if (precioCombo === undefined && descuento === undefined) {
-            // Si no se da ninguno, el precio es el base y no hay descuento
-            precioFinalCombo = precioBaseProductos;
-            descuentoPorcentaje = 0;
-        }
+        // if (precioCombo === undefined && descuento !== undefined) {
+        //     // Si solo se da descuento, calcular el precio final
+        //     precioFinalCombo = precioBaseProductos * (1 - (descuento / 100));
+        // } else if (precioCombo !== undefined && descuento === undefined) {
+        //     // Si solo se da precio final, calcular el descuento porcentual
+        //     if (precioBaseProductos > 0) {
+        //         descuentoPorcentaje = ((precioBaseProductos - precioCombo) / precioBaseProductos) * 100;
+        //         if (descuentoPorcentaje < 0) descuentoPorcentaje = 0; // No hay descuento, incluso si el precio es mayor
+        //     } else {
+        //         descuentoPorcentaje = 0;
+        //     }
+        // } else if (precioCombo === undefined && descuento === undefined) {
+        //     // Si no se da ninguno, el precio es el base y no hay descuento
+        //     precioFinalCombo = precioBaseProductos;
+        //     descuentoPorcentaje = 0;
+        // }
 
 
         const nuevoCombo = new Combo({
@@ -61,7 +66,7 @@ exports.crearCombo = async (req, res) => {
             precioCombo: precioFinalCombo,
             descuento: descuentoPorcentaje,
             imagen,
-            activo: true, // Los combos por defecto se crean activos
+            estado: true, // Los combos por defecto se crean activos
         });
 
         await nuevoCombo.save();
@@ -93,8 +98,8 @@ exports.crearCombo = async (req, res) => {
 exports.listarCombos = async (req, res) => {
     try {
         const query = {};
-        if (req.query.activo !== undefined) {
-            query.activo = req.query.activo === 'true';
+        if (req.query.estado !== undefined) {
+            query.estado = req.query.estado === 'true';
         }
 
         const combos = await Combo.find(query).sort({ nombre: 1 });
@@ -240,10 +245,10 @@ exports.activarCombo = async (req, res) => {
         if (!combo) {
             return res.status(404).json({ mensaje: 'Combo no encontrado.' });
         }
-        if (combo.activo) {
+        if (combo.estado) {
             return res.status(200).json({ mensaje: 'El combo ya está activo.', combo });
         }
-        combo.activo = true;
+        combo.estado = true;
         await combo.save();
         res.status(200).json({ mensaje: 'Combo activado exitosamente.', combo });
     } catch (error) {
@@ -267,10 +272,10 @@ exports.desactivarCombo = async (req, res) => {
         if (!combo) {
             return res.status(404).json({ mensaje: 'Combo no encontrado.' });
         }
-        if (!combo.activo) {
+        if (!combo.estado) {
             return res.status(200).json({ mensaje: 'El combo ya está inactivo.', combo });
         }
-        combo.activo = false;
+        combo.estado = false;
         await combo.save();
         res.status(200).json({ mensaje: 'Combo desactivado exitosamente.', combo });
     } catch (error) {
