@@ -63,6 +63,10 @@ const usuarioSchema = new Schema({
     unique: true, // Un usuario solo puede tener un perfil de repartidor
     sparse: true // <--- ¡CRÍTICO! Permite valores nulos para unique en este campo
   },
+  fotoPerfil: {
+    type: String,
+    default: 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png' // URL de una imagen de perfil por defecto
+  }
 }, {
   timestamps: true // Esto añade campos `createdAt` y `updatedAt` automáticamente
 });

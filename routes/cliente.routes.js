@@ -8,6 +8,7 @@ router.post('/', clienteController.createCliente);
 router.get('/', clienteController.getClientes);
 // Un cliente puede ver/actualizar su propio perfil, un admin cualquiera. La lógica fina está en el controlador.
 router.get('/:id', clienteController.getClienteById);
+router.get('/by-usuario/:usuarioId', clienteController.getClienteByUsuarioId);
 router.put('/:id', clienteController.updateCliente);
 router.delete('/:id', clienteController.deleteCliente);
 

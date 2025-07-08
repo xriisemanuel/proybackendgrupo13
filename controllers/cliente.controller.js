@@ -139,6 +139,61 @@ exports.getClienteById = async (req, res) => {
 };
 
 /**
+ * @desc Obtener un perfil de cliente por el ID de usuario asociado
+ * @route GET /api/clientes/by-usuario/:usuarioId
+ * @access Admin, Cliente (para su propio perfil)
+ */
+exports.getClienteByUsuarioId = async (req, res) => {
+  console.log(`ClienteController: Intentando obtener cliente por usuarioId: ${req.params.usuarioId}`);
+  try {
+    const cliente = await Cliente.findOne({ usuarioId: req.params.usuarioId }).populate({
+      path: 'usuarioId',
+      select: 'username email nombre apellido telefono rolId',
+      populate: {
+        path: 'rolId',
+        select: 'nombre'
+      }
+    });
+
+    if (!cliente) {
+      console.log(`ClienteController: Cliente con usuarioId ${req.params.usuarioId} no encontrado.`);
+      return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado para este usuario.' });
+    }
+
+    // Lógica de autorización: un cliente solo puede ver su propio perfil
+    // Un admin puede ver cualquier perfil
+    if (req.usuario && req.usuario.rol === 'cliente' && cliente.usuarioId._id.toString() !== req.usuario._id.toString()) {
+      console.warn(`ClienteController: Acceso denegado para usuario ${req.usuario._id} al perfil de cliente de usuario ${req.params.usuarioId}`);
+      return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para ver este perfil de cliente.' });
+    }
+
+    console.log('ClienteController: Cliente obtenido por usuarioId exitosamente:', cliente);
+    res.status(200).json(cliente);
+  } catch (error) {
+    console.error('ClienteController: Error al obtener cliente por usuarioId:', error);
+    if (error.name === 'CastError') {
+      return res.status(400).json({ mensaje: 'ID de usuario inválido.' });
+    }
+    res.status(500).json({
+      mensaje: 'Error interno del servidor al obtener el perfil de cliente por usuarioId.',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+
+/**
+ * @desc Actualizar un perfil de cliente por ID
+ * @route PUT /api/clientes/:id
+ * @access Admin, Cliente (para su propio perfil)
+ * @body {string} [direccion]
+ * @body {Date} [fechaNacimiento]
+ * @body {string[]} [preferenciasAlimentarias]
+ * @body {number} [puntos]
+ */
+
+/**
  * @desc Actualizar un perfil de cliente por ID
  * @route PUT /api/clientes/:id
  * @access Admin, Cliente (para su propio perfil)

@@ -34,7 +34,7 @@ exports.registerUser = async (req, res) => {
     const {
       username, password, email, telefono, rolName, nombre, apellido,
       direccionCliente, fechaNacimientoCliente, preferenciasAlimentariasCliente, puntosCliente,
-      vehiculoRepartidor, numeroLicenciaRepartidor
+      vehiculoRepartidor, numeroLicenciaRepartidor, fotoPerfil
     } = req.body;
 
     // Validar que los campos mínimos estén presentes
@@ -68,7 +68,8 @@ exports.registerUser = async (req, res) => {
       rolId: foundRol._id,
       estado: true, // Por defecto, el usuario está activo
       nombre,
-      apellido
+      apellido, 
+      fotoPerfil: fotoPerfil || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png' // Usar la proporcionada o una por defecto
     });
 
     // 5. Crear el perfil de rol específico y vincularlo al usuario
@@ -199,7 +200,8 @@ exports.loginUser = async (req, res) => {
         email: user.email,
         rol: user.rolId.nombre,
         nombre: user.nombre,
-        apellido: user.apellido
+        apellido: user.apellido,
+        fotoPerfil: user.fotoPerfil
       }
     });
 
