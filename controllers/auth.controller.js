@@ -6,7 +6,7 @@ const Rol = require('../models/rol');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'tu_secreto_jwt_aqui'; // Usar una variable de entorno o un valor por defecto
+const JWT_SECRET = process.env.JWT_SECRET || '1234567890'; // Usar una variable de entorno o un valor por defecto
 
 /**
  * @desc Registra un nuevo usuario en el sistema, creando también su perfil de rol específico si aplica.
