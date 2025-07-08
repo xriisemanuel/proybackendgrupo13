@@ -54,6 +54,7 @@ const ofertaSchema = new Schema({
 
 // --- Validaciones a nivel de esquema ---
 ofertaSchema.path('fechaFin').validate(function(value) {
+  if (!this.fechaInicio) return true; // Si no hay fechaInicio, no validar
   return this.fechaInicio <= value;
 }, 'La fecha de fin de la oferta debe ser posterior o igual a la fecha de inicio.');
 

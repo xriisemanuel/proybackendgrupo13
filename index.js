@@ -60,11 +60,11 @@ app.use('/api/categorias', autenticar, autorizar(['admin']), categoriaRoutes);
 // Rutas de Gestión de Productos (CRUD completo): Solo Administrador
 app.use('/api/productos', autenticar, autorizar(['admin']), productoRoutes);
 
-// Rutas de Gestión de Combos: Solo Administrador
-app.use('/api/combos', autenticar, autorizar(['admin']), comboRoutes);
+// Rutas de Combos: Público para ver, Administrador para gestionar
+app.use('/api/combos', comboRoutes); // Todas las rutas de combos (GET público, otros protegidos en el router)
 
-// Rutas de Gestión de Ofertas: Solo Administrador y Supervisor de Ventas
-app.use('/api/ofertas', autenticar, autorizar(['admin', 'supervisor_ventas']), ofertaRoutes);
+// Rutas de Ofertas: Público para ver, Administrador y Supervisor para gestionar
+app.use('/api/ofertas', ofertaRoutes); // Todas las rutas de ofertas (GET público, otros protegidos en el router)
 
 // Rutas de Repartidores: Acceso granular en controlador.
 // ¡¡¡ESTA ES LA LÍNEA CLAVE!!! Asegúrate de que solo esta exista para /api/repartidores

@@ -11,7 +11,7 @@ const Categoria = require('../models/categoria.model'); // Para validar categor�
  */
 exports.crearOferta = async (req, res) => {
   try {
-    const { nombre, descripcion, descuento, fechaInicio, fechaFin, productosAplicables, categoriasAplicables, imagen } = req.body;
+    const { nombre, descripcion, descuento, fechaInicio, fechaFin, productosAplicables, categoriasAplicables, imagen, estado } = req.body;
 
     // Validar productosAplicables si se proporcionan
     if (productosAplicables && productosAplicables.length > 0) {
@@ -29,6 +29,14 @@ exports.crearOferta = async (req, res) => {
       }
     }
     
+    // Validar que haya al menos un producto Y al menos una categoría
+    if (!productosAplicables || productosAplicables.length === 0) {
+      return res.status(400).json({ mensaje: 'Debes seleccionar al menos un producto para la oferta.' });
+    }
+    if (!categoriasAplicables || categoriasAplicables.length === 0) {
+      return res.status(400).json({ mensaje: 'Debes seleccionar al menos una categoría para la oferta.' });
+    }
+    
     const nuevaOferta = new Oferta({
       nombre,
       descripcion,
@@ -37,8 +45,8 @@ exports.crearOferta = async (req, res) => {
       fechaFin,
       productosAplicables: productosAplicables || [],
       categoriasAplicables: categoriasAplicables || [],
-      estado: true, // Las ofertas se crean activas por defecto
-      imagen: req.body.imagen || null // Imagen opcional
+      estado: estado !== undefined ? estado : true, // Usa el valor del frontend o true por defecto
+      imagen: imagen || null,
     });
 
     await nuevaOferta.save();
@@ -64,14 +72,17 @@ exports.crearOferta = async (req, res) => {
 
 /**
  * @route GET /api/ofertas
- * @desc Obtiene todas las ofertas (opcionalmente filtradas por estado o vigencia)
+ * @desc Obtiene todas las ofertas (opcionalmente filtradas por estado, vigencia o búsqueda)
  * @access Público
  * @queryParam estado (boolean): true para activas, false para inactivas
  * @queryParam vigente (boolean): true para ofertas actualmente vigentes
+ * @queryParam buscar (string): término de búsqueda para filtrar por nombre, descripción, productos o categorías
  */
 exports.obtenerOfertas = async (req, res) => {
   try {
     const query = {};
+    
+    // Filtro por estado
     if (req.query.estado !== undefined) {
       query.estado = req.query.estado === 'true';
     }
@@ -85,6 +96,31 @@ exports.obtenerOfertas = async (req, res) => {
     if (req.query.vigente !== undefined) {
       const esVigente = req.query.vigente === 'true';
       ofertas = ofertas.filter(oferta => oferta.estaVigente() === esVigente);
+    }
+
+    // Filtro por búsqueda en múltiples campos
+    if (req.query.buscar) {
+      const terminoBusqueda = req.query.buscar.toLowerCase();
+      
+      ofertas = ofertas.filter(oferta => {
+        // Buscar en nombre
+        const nombreCoincide = oferta.nombre && oferta.nombre.toLowerCase().includes(terminoBusqueda);
+        
+        // Buscar en descripción
+        const descripcionCoincide = oferta.descripcion && oferta.descripcion.toLowerCase().includes(terminoBusqueda);
+        
+        // Buscar en productos
+        const productosCoinciden = oferta.productosAplicables && oferta.productosAplicables.some(producto => 
+          producto.nombre && producto.nombre.toLowerCase().includes(terminoBusqueda)
+        );
+        
+        // Buscar en categorías
+        const categoriasCoinciden = oferta.categoriasAplicables && oferta.categoriasAplicables.some(categoria => 
+          categoria.nombre && categoria.nombre.toLowerCase().includes(terminoBusqueda)
+        );
+        
+        return nombreCoincide || descripcionCoincide || productosCoinciden || categoriasCoinciden;
+      });
     }
 
     res.status(200).json(ofertas);

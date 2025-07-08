@@ -10,20 +10,27 @@ const Producto = require('../models/producto'); // Necesario para validar produc
  */
 exports.crearCombo = async (req, res) => {
     try {
-        //const { nombre, descripcion, productosIds, precioCombo, descuento, imagen } = req.body;
         const { nombre, descripcion, productos, descuento, imagen } = req.body;
 
-        // 1. Validar que se hayan proporcionado productosIds y que sea un array
-        // if (!productosIds || !Array.isArray(productosIds) || productosIds.length === 0) {
-        //     return res.status(400).json({ mensaje: 'El combo debe contener al menos un producto.' });
-        // }
+        // 1. Validar que se hayan proporcionado productos y que sea un array
         if (!productos || !Array.isArray(productos) || productos.length === 0) {
             return res.status(400).json({ mensaje: 'El combo debe contener al menos un producto.' });
         }
 
-        // 2. Verificar que todos los productos existan y estén disponibles
+        // 2. Validar estructura de productos
+        for (let producto of productos) {
+            if (!producto.productoId || !producto.unidades || producto.unidades < 1) {
+                return res.status(400).json({ 
+                    mensaje: 'Cada producto debe tener un ID válido y al menos 1 unidad.' 
+                });
+            }
+        }
+
+        // 3. Extraer IDs de productos para validación
+        const productosIds = productos.map(p => p.productoId);
+
+        // 4. Verificar que todos los productos existan y estén disponibles
         const productosExistentes = await Producto.find({ _id: { $in: productosIds } });
-        
         if (productosExistentes.length !== productosIds.length) {
             return res.status(404).json({ mensaje: 'Uno o más productos no fueron encontrados o no son válidos.' });
         }
@@ -35,38 +42,13 @@ exports.crearCombo = async (req, res) => {
             });
         }
 
-        // Opcional: Calcular el precio sugerido si el precioCombo no se proporciona,
-        // o validar que el descuento sea coherente.
-        // const precioBaseProductos = productosExistentes.reduce((sum, prod) => sum + prod.precio, 0);
-        // let precioFinalCombo = precioCombo;
-        // let descuentoPorcentaje = descuento;
-
-        // if (precioCombo === undefined && descuento !== undefined) {
-        //     // Si solo se da descuento, calcular el precio final
-        //     precioFinalCombo = precioBaseProductos * (1 - (descuento / 100));
-        // } else if (precioCombo !== undefined && descuento === undefined) {
-        //     // Si solo se da precio final, calcular el descuento porcentual
-        //     if (precioBaseProductos > 0) {
-        //         descuentoPorcentaje = ((precioBaseProductos - precioCombo) / precioBaseProductos) * 100;
-        //         if (descuentoPorcentaje < 0) descuentoPorcentaje = 0; // No hay descuento, incluso si el precio es mayor
-        //     } else {
-        //         descuentoPorcentaje = 0;
-        //     }
-        // } else if (precioCombo === undefined && descuento === undefined) {
-        //     // Si no se da ninguno, el precio es el base y no hay descuento
-        //     precioFinalCombo = precioBaseProductos;
-        //     descuentoPorcentaje = 0;
-        // }
-
-
         const nuevoCombo = new Combo({
             nombre,
             descripcion,
-            productosIds,
-            precioCombo: precioFinalCombo,
-            descuento: descuentoPorcentaje,
+            productos,
+            descuento: descuento || 0,
             imagen,
-            estado: true, // Los combos por defecto se crean activos
+            estado: req.body.estado !== undefined ? req.body.estado : true,
         });
 
         await nuevoCombo.save();
@@ -155,12 +137,25 @@ exports.actualizarCombo = async (req, res) => {
         const updateData = req.body;
 
         // Si se actualizan los productos, validar que existan y estén disponibles
-        if (updateData.productosIds) {
-            if (!Array.isArray(updateData.productosIds) || updateData.productosIds.length === 0) {
+        if (updateData.productos) {
+            if (!Array.isArray(updateData.productos) || updateData.productos.length === 0) {
                 return res.status(400).json({ mensaje: 'El combo debe contener al menos un producto.' });
             }
-            const productosExistentes = await Producto.find({ _id: { $in: updateData.productosIds } });
-            if (productosExistentes.length !== updateData.productosIds.length) {
+
+            // Validar estructura de productos
+            for (let producto of updateData.productos) {
+                if (!producto.productoId || !producto.unidades || producto.unidades < 1) {
+                    return res.status(400).json({ 
+                        mensaje: 'Cada producto debe tener un ID válido y al menos 1 unidad.' 
+                    });
+                }
+            }
+
+            // Extraer IDs de productos para validación
+            const productosIds = updateData.productos.map(p => p.productoId);
+
+            const productosExistentes = await Producto.find({ _id: { $in: productosIds } });
+            if (productosExistentes.length !== productosIds.length) {
                 return res.status(404).json({ mensaje: 'Uno o más productos no fueron encontrados o no son válidos.' });
             }
             const productosNoDisponibles = productosExistentes.filter(p => !p.disponible || p.stock <= 0);
@@ -171,11 +166,6 @@ exports.actualizarCombo = async (req, res) => {
                 });
             }
         }
-
-        // Opcional: Recalcular precioCombo o descuento si se modifican sus componentes
-        // Esta lógica podría volverse compleja si se quiere mantener una relación estricta entre descuento, productos y precioCombo.
-        // Por simplicidad, asumimos que si se envía `precioCombo` o `descuento`, esos son los valores deseados.
-
 
         const comboActualizado = await Combo.findByIdAndUpdate(id, updateData, {
             new: true, // Devuelve el documento actualizado
