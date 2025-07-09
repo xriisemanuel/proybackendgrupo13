@@ -10,6 +10,11 @@ exports.generateImage = async (req, res) => {
     try {
         const { prompt } = req.body;
 
+        // ***** AQUÍ ES DONDE DEBES AGREGAR ESTAS LÍNEAS *****
+        console.log('Prompt recibido del frontend:', prompt);
+        console.log('Longitud del prompt:', prompt ? prompt.length : 0);
+        // ***************************************************
+
         if (!prompt) {
             return res.status(400).json({ mensaje: 'El prompt es requerido para generar la imagen.' });
         }

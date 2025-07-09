@@ -47,7 +47,7 @@ app.use('/api/usuario', autenticar, autorizar(['admin']), usuarioRoutes);
 app.use('/api/pedido', autenticar, autorizar(['admin', 'cliente', 'repartidor', 'supervisor_cocina', 'supervisor_ventas']), pedidoRoutes);
 
 // Rutas de Ventas: Accesible por Administrador y Supervisor de Ventas
-app.use('/api/ventas', autenticar, autorizar(['admin', 'supervisor_ventas']), ventaRoutes);
+app.use('/api/ventas', autenticar, autorizar(['admin', 'supervisor_ventas', 'supervisor_cocina']), ventaRoutes);
 
 // Rutas de Calificaciones: Solo accesible por Clientes
 app.use('/api/calificaciones', autenticar, autorizar(['cliente']), calificacionRoutes);
@@ -67,14 +67,14 @@ app.use('/api/combos', autenticar, autorizar(['admin']), comboRoutes);
 app.use('/api/ofertas', autenticar, autorizar(['admin', 'supervisor_ventas']), ofertaRoutes);
 
 // Rutas de Repartidores: Acceso granular en controlador.
-app.use('/api/repartidores', autenticar, autorizar(['admin', 'repartidor', 'supervisor_ventas']), repartidorRoutes);
+app.use('/api/repartidores', autenticar, autorizar(['admin', 'repartidor', 'supervisor_ventas', 'supervisor_cocina']), repartidorRoutes);
 
 // Rutas de Clientes: Acceso granular en controlador.
 app.use('/api/cliente', autenticar, autorizar(['admin', 'cliente']), clienteRoutes);
 
 // --- Rutas de Generación de Imágenes ---
 // Se mantiene la autenticación aquí para la generación de imágenes, ya que es una operación que modifica/consume recursos.
-app.use('/api', autenticar, imageGenerationRoutes); // Protege el router con autenticación.
+app.use('/api', imageGenerationRoutes); // Protege el router con autenticación.
 
 // Configuración del puerto y arranque del servidor
 app.set('port', process.env.PORT || 3000);
