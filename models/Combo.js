@@ -21,23 +21,28 @@ const comboSchema = new Schema({
         ref: 'Producto', // Referencia al modelo Producto
         required: [true, 'Cada combo debe contener al menos un producto.'],
     }],
-    precioCombo: { // Precio al que se vende el combo
+    precioCombo: { // Precio base del combo (suma de productos individuales)
         type: Number,
         required: [true, 'El precio del combo es obligatorio.'],
         min: [0, 'El precio del combo no puede ser negativo.'],
     },
-    descuento: { // Porcentaje de descuento aplicado sobre la suma de precios individuales
+    descuento: { // Porcentaje de descuento aplicado sobre el precio base
         type: Number,
         default: 0,
         min: [0, 'El descuento no puede ser negativo.'],
         max: [100, 'El descuento no puede exceder el 100%.'],
+    },
+    precioFinal: { // Precio final después de aplicar el descuento
+        type: Number,
+        required: [true, 'El precio final del combo es obligatorio.'],
+        min: [0, 'El precio final no puede ser negativo.'],
     },
     imagen: { // URL de la imagen representativa del combo
         type: String,
         trim: true,
         default: null,
     },
-    estado: { // Indica si el combo está disponible para la venta
+    activo: { // Indica si el combo está disponible para la venta
         type: Boolean,
         default: true,
     },
@@ -45,12 +50,46 @@ const comboSchema = new Schema({
 
 // --- Hooks Mongoose ---
 
-// Hook pre-save y pre-findOneAndUpdate para calcular el precio del combo con descuento
-// o para ajustar el precio base si el descuento es 0.
-// Esto podría ser complejo si el precioCombo se basa en el descuento sobre los productos.
-// Para simplicidad, asumiremos que precioCombo es el precio final que se desea,
-// y 'descuento' es informativo o se usa para validación.
-// Si precioCombo DEBE ser calculado basado en productos y descuento, la lógica sería más compleja.
+// Hook pre-save para calcular el precio final basado en el descuento
+comboSchema.pre('save', async function(next) {
+    try {
+        // Calcular el precio final basado en el descuento
+        this.precioFinal = this.precioCombo * (1 - (this.descuento / 100));
+        
+        // Si el descuento es 100%, el precio final debe ser 0
+        if (this.descuento === 100) {
+            this.precioFinal = 0;
+        }
+        
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Hook pre-findOneAndUpdate para calcular el precio final en actualizaciones
+comboSchema.pre('findOneAndUpdate', async function(next) {
+    try {
+        const update = this.getUpdate();
+        
+        // Si se está actualizando precioCombo o descuento, recalcular precioFinal
+        if (update.precioCombo !== undefined || update.descuento !== undefined) {
+            const precioCombo = update.precioCombo || this.precioCombo;
+            const descuento = update.descuento || this.descuento;
+            
+            update.precioFinal = precioCombo * (1 - (descuento / 100));
+            
+            // Si el descuento es 100%, el precio final debe ser 0
+            if (descuento === 100) {
+                update.precioFinal = 0;
+            }
+        }
+        
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
 
 // --- Métodos de instancia ---
 
@@ -68,16 +107,11 @@ comboSchema.methods.obtenerPrecioBaseProductos = async function () {
 
 /**
  * Calcula el descuento real del combo en valor monetario.
- * Asume que `precioCombo` es el precio final ya con descuento aplicado.
- * Si `descuento` es un porcentaje, esto es lo que representa.
  * @returns {Promise<Number>} El monto del descuento.
  */
 comboSchema.methods.calcularDescuentoMonto = async function () {
     const precioBase = await this.obtenerPrecioBaseProductos();
-    const precioConDescuentoCalculado = precioBase * (1 - (this.descuento / 100));
-    // Si el precioCombo es menor que el precio calculado con descuento,
-    // el descuento real es la diferencia entre precio base y precioCombo
-    const descuentoMonto = precioBase - this.precioCombo;
+    const descuentoMonto = precioBase - this.precioFinal;
     return Math.max(0, descuentoMonto); // Asegura que el descuento no sea negativo
 };
 

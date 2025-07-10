@@ -6,13 +6,10 @@ const Categoria = require('../models/categoria.model'); // Para verificar si la 
 exports.getProducts = async (req, res) => {
   try {
     const products = await Producto.find()
-  .select('nombre descripcion precio categoriaId stock disponible popularidad imagen') // 👈 asegurás que 'imagen' esté incluido
-  .populate('categoriaId', 'nombre descripcion');
+      .select('nombre descripcion precio categoriaId stock disponible popularidad imagen')
+      .populate('categoriaId', 'nombre descripcion');
 
-res.status(200).json(products);
-
-
-    res.status(200).json(productosConImagen);
+    res.status(200).json(products);
   } catch (error) {
     console.error('Error al obtener productos:', error);
     res.status(500).json({ mensaje: 'Error interno del servidor al obtener productos.' });
@@ -53,7 +50,7 @@ exports.getProductById = async (req, res) => {
 exports.createProduct = async (req, res) => {
   try {
     // Los campos deben coincidir con tu modelo
-    const { nombre, descripcion, precio, categoriaId, imagenes, disponible, stock, popularidad } = req.body;
+    const { nombre, descripcion, precio, categoriaId, imagen, disponible, stock, popularidad } = req.body;
 
     // Validación básica basada en tus 'required' del modelo
     if (!nombre || !precio || !categoriaId || stock === undefined) {
@@ -71,7 +68,7 @@ exports.createProduct = async (req, res) => {
       descripcion,
       precio,
       categoriaId, // <<<< Usamos categoriaId
-      imagenes,
+      imagen,
       disponible: disponible !== undefined ? disponible : (stock > 0), // El hook pre-save también lo manejará
       stock,
       popularidad: popularidad !== undefined ? popularidad : 0
@@ -101,13 +98,13 @@ exports.createProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     // Los campos a actualizar deben coincidir con tu modelo
-    const { nombre, descripcion, precio, categoriaId, imagenes, disponible, stock, popularidad } = req.body;
+    const { nombre, descripcion, precio, categoriaId, imagen, disponible, stock, popularidad } = req.body;
     const updateFields = {};
 
     if (nombre !== undefined) updateFields.nombre = nombre;
     if (descripcion !== undefined) updateFields.descripcion = descripcion;
     if (precio !== undefined) updateFields.precio = precio;
-    if (imagenes !== undefined) updateFields.imagenes = imagenes;
+    if (imagen !== undefined) updateFields.imagen = imagen;
     if (stock !== undefined) updateFields.stock = stock;
     if (popularidad !== undefined) updateFields.popularidad = popularidad;
     // Si 'disponible' se envía explícitamente, úsalo. Si no, el hook 'pre-findOneAndUpdate' lo ajustará por stock.

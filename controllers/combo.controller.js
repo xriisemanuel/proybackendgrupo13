@@ -10,7 +10,7 @@ const Producto = require('../models/producto'); // Necesario para validar produc
  */
 exports.crearCombo = async (req, res) => {
     try {
-        const { nombre, descripcion, productosIds, precioCombo, descuento, imagen } = req.body;
+        const { nombre, descripcion, productosIds, precioCombo, descuento, imagen, activo } = req.body;
 
         // 1. Validar que se hayan proporcionado productosIds y que sea un array
         if (!productosIds || !Array.isArray(productosIds) || productosIds.length === 0) {
@@ -30,38 +30,32 @@ exports.crearCombo = async (req, res) => {
             });
         }
 
-        // Opcional: Calcular el precio sugerido si el precioCombo no se proporciona,
-        // o validar que el descuento sea coherente.
+        // 3. Calcular el precio base del combo (suma de productos individuales)
         const precioBaseProductos = productosExistentes.reduce((sum, prod) => sum + prod.precio, 0);
-        let precioFinalCombo = precioCombo;
-        let descuentoPorcentaje = descuento;
+        
+        // 4. Validar y procesar el descuento
+        let descuentoFinal = descuento || 0;
+        if (descuentoFinal < 0) descuentoFinal = 0;
+        if (descuentoFinal > 100) descuentoFinal = 100;
 
-        if (precioCombo === undefined && descuento !== undefined) {
-            // Si solo se da descuento, calcular el precio final
-            precioFinalCombo = precioBaseProductos * (1 - (descuento / 100));
-        } else if (precioCombo !== undefined && descuento === undefined) {
-            // Si solo se da precio final, calcular el descuento porcentual
-            if (precioBaseProductos > 0) {
-                descuentoPorcentaje = ((precioBaseProductos - precioCombo) / precioBaseProductos) * 100;
-                if (descuentoPorcentaje < 0) descuentoPorcentaje = 0; // No hay descuento, incluso si el precio es mayor
-            } else {
-                descuentoPorcentaje = 0;
-            }
-        } else if (precioCombo === undefined && descuento === undefined) {
-            // Si no se da ninguno, el precio es el base y no hay descuento
-            precioFinalCombo = precioBaseProductos;
-            descuentoPorcentaje = 0;
+        // 5. Calcular el precio final con descuento
+        let precioFinalCalculado = precioBaseProductos * (1 - (descuentoFinal / 100));
+        
+        // Si el descuento es 100%, el precio final debe ser 0
+        if (descuentoFinal === 100) {
+            precioFinalCalculado = 0;
         }
 
-
+        // 6. Crear el combo con todos los campos calculados
         const nuevoCombo = new Combo({
             nombre,
             descripcion,
             productosIds,
-            precioCombo: precioFinalCombo,
-            descuento: descuentoPorcentaje,
+            precioCombo: precioBaseProductos, // Precio base (suma de productos)
+            descuento: descuentoFinal, // Porcentaje de descuento
+            precioFinal: precioFinalCalculado, // Precio final después del descuento
             imagen,
-            activo: true, // Los combos por defecto se crean activos
+            activo: activo !== undefined ? activo : true, // Por defecto activo
         });
 
         await nuevoCombo.save();
@@ -165,12 +159,31 @@ exports.actualizarCombo = async (req, res) => {
                     productosNoDisponibles: productosNoDisponibles.map(p => ({ id: p._id, nombre: p.nombre }))
                 });
             }
+
+            // Recalcular precio base si se cambiaron los productos
+            const precioBaseProductos = productosExistentes.reduce((sum, prod) => sum + prod.precio, 0);
+            updateData.precioCombo = precioBaseProductos;
         }
 
-        // Opcional: Recalcular precioCombo o descuento si se modifican sus componentes
-        // Esta lógica podría volverse compleja si se quiere mantener una relación estricta entre descuento, productos y precioCombo.
-        // Por simplicidad, asumimos que si se envía `precioCombo` o `descuento`, esos son los valores deseados.
-
+        // Si se actualiza el descuento, recalcular el precio final
+        if (updateData.descuento !== undefined) {
+            let descuentoFinal = updateData.descuento;
+            if (descuentoFinal < 0) descuentoFinal = 0;
+            if (descuentoFinal > 100) descuentoFinal = 100;
+            
+            updateData.descuento = descuentoFinal;
+            
+            // Calcular nuevo precio final
+            const precioCombo = updateData.precioCombo || (await Combo.findById(id)).precioCombo;
+            let precioFinalCalculado = precioCombo * (1 - (descuentoFinal / 100));
+            
+            // Si el descuento es 100%, el precio final debe ser 0
+            if (descuentoFinal === 100) {
+                precioFinalCalculado = 0;
+            }
+            
+            updateData.precioFinal = precioFinalCalculado;
+        }
 
         const comboActualizado = await Combo.findByIdAndUpdate(id, updateData, {
             new: true, // Devuelve el documento actualizado
