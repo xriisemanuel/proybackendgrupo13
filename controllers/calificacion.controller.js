@@ -1,6 +1,6 @@
 const Calificacion = require('../models/Calificacion');
 const Pedido = require('../models/pedido'); // Para verificar que el pedido existe y ya fue entregado
-const Cliente = require('../models/cliente.model'); // Para verificar que el cliente existe
+const Cliente = require('../models/cliente.model'); // Para verificar que el cliente existe y obtener el clienteId
 const Producto = require('../models/producto'); // Para verificar productos en calificaciones específicas
 
 // --- Operaciones CRUD Básicas ---
@@ -9,13 +9,31 @@ exports.crearCalificacion = async (req, res) => {
   try {
     const {
       pedidoId,
-      clienteId,
       puntuacionComida,
       puntuacionServicio,
       puntuacionEntrega,
       comentario,
       calificacionProductos
     } = req.body;
+
+    // Obtener el usuarioId del token JWT
+    const usuarioId = req.usuario._id;
+
+    // Verificar que el usuario autenticado sea un cliente
+    if (req.usuario.rol !== 'cliente') {
+      return res.status(403).json({ mensaje: 'Solo los clientes pueden crear calificaciones.' });
+    }
+
+    // Buscar el cliente asociado a este usuario
+    const cliente = await Cliente.findOne({ usuarioId: usuarioId });
+    if (!cliente) {
+      return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado.' });
+    }
+    const clienteId = cliente._id;
+    
+    console.log('DEBUG - Usuario ID del token:', usuarioId);
+    console.log('DEBUG - Cliente encontrado:', cliente._id);
+    console.log('DEBUG - Cliente ID:', clienteId);
 
     // 1. Verificar que el pedido exista y esté en estado 'entregado'
     const pedido = await Pedido.findById(pedidoId);
@@ -26,15 +44,16 @@ exports.crearCalificacion = async (req, res) => {
       return res.status(400).json({ mensaje: 'Solo se pueden calificar pedidos que ya han sido entregados.' });
     }
     // Asegurarse de que el cliente de la calificación sea el mismo que el del pedido
-    if (pedido.clienteId.toString() !== clienteId) {
+    console.log('DEBUG - Pedido Cliente ID:', pedido.clienteId.toString());
+    console.log('DEBUG - Cliente ID del token:', clienteId.toString());
+    console.log('DEBUG - Comparación:', pedido.clienteId.toString() === clienteId.toString());
+    
+    if (pedido.clienteId.toString() !== clienteId.toString()) {
         return res.status(403).json({ mensaje: 'No tiene permiso para calificar este pedido.' });
     }
 
-    // 2. Verificar que el cliente exista
-    const cliente = await Cliente.findById(clienteId);
-    if (!cliente) {
-      return res.status(404).json({ mensaje: 'Cliente no encontrado.' });
-    }
+    // 2. Verificar que el cliente exista (ya verificado anteriormente)
+    // El cliente ya fue encontrado y verificado en el paso anterior
 
     // 3. Verificar si ya existe una calificación para este pedido
     const calificacionExistente = await Calificacion.findOne({ pedidoId });
@@ -71,7 +90,28 @@ exports.crearCalificacion = async (req, res) => {
       calificacionProductos,
     });
 
+    console.log('DEBUG - Nueva calificación a guardar:', {
+      pedidoId,
+      clienteId,
+      puntuacionComida,
+      puntuacionServicio,
+      puntuacionEntrega,
+      comentario
+    });
+    console.log('DEBUG - Tipos de datos a guardar:', {
+      puntuacionComida: typeof puntuacionComida,
+      puntuacionServicio: typeof puntuacionServicio,
+      puntuacionEntrega: typeof puntuacionEntrega
+    });
+
     await nuevaCalificacion.save();
+
+    console.log('DEBUG - Calificación guardada:', nuevaCalificacion);
+    console.log('DEBUG - Valores guardados:', {
+      puntuacionComida: nuevaCalificacion.puntuacionComida,
+      puntuacionServicio: nuevaCalificacion.puntuacionServicio,
+      puntuacionEntrega: nuevaCalificacion.puntuacionEntrega
+    });
 
     res.status(201).json({
       mensaje: 'Calificación creada exitosamente',
@@ -88,9 +128,36 @@ exports.crearCalificacion = async (req, res) => {
 
 exports.obtenerCalificaciones = async (req, res) => {
   try {
-    const calificaciones = await Calificacion.find({})
-      .populate('pedidoId', 'fechaPedido estado') // Trae algunos datos del pedido
-      .populate('clienteId', 'nombre apellido email'); // Trae algunos datos del cliente
+    // Obtener el usuarioId del token JWT
+    const usuarioId = req.usuario._id;
+    
+    // Buscar el cliente asociado a este usuario
+    const cliente = await Cliente.findOne({ usuarioId: usuarioId });
+    if (!cliente) {
+      return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado.' });
+    }
+    
+    // Obtener solo las calificaciones del cliente autenticado
+    const calificaciones = await Calificacion.find({ clienteId: cliente._id })
+      .populate('pedidoId', 'fechaPedido estado _id') // Incluir _id para que esté disponible
+      .sort({ fechaCalificacion: -1 }); // Ordenar por fecha más reciente
+    
+    console.log('DEBUG - Calificaciones encontradas:', calificaciones.length);
+    if (calificaciones.length > 0) {
+      console.log('DEBUG - Primera calificación:', {
+        _id: calificaciones[0]._id,
+        puntuacionComida: calificaciones[0].puntuacionComida,
+        puntuacionServicio: calificaciones[0].puntuacionServicio,
+        puntuacionEntrega: calificaciones[0].puntuacionEntrega,
+        pedidoId: calificaciones[0].pedidoId
+      });
+      console.log('DEBUG - Tipos de datos:', {
+        puntuacionComida: typeof calificaciones[0].puntuacionComida,
+        puntuacionServicio: typeof calificaciones[0].puntuacionServicio,
+        puntuacionEntrega: typeof calificaciones[0].puntuacionEntrega
+      });
+    }
+    
     res.status(200).json(calificaciones);
   } catch (error) {
     console.error('Error al obtener calificaciones:', error);
@@ -123,12 +190,33 @@ exports.obtenerCalificacionPorId = async (req, res) => {
 
 exports.eliminarCalificacion = async (req, res) => {
   try {
-    const calificacionEliminada = await Calificacion.findByIdAndDelete(req.params.id);
-    if (!calificacionEliminada) {
+    // Obtener el usuarioId del token JWT
+    const usuarioId = req.usuario._id;
+    
+    // Buscar el cliente asociado a este usuario
+    const cliente = await Cliente.findOne({ usuarioId: usuarioId });
+    if (!cliente) {
+      return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado.' });
+    }
+
+    // Buscar la calificación y verificar que pertenece al cliente autenticado
+    const calificacion = await Calificacion.findById(req.params.id);
+    if (!calificacion) {
       return res.status(404).json({
-        mensaje: 'Calificación no encontrada para eliminar'
+        mensaje: 'Calificación no encontrada'
       });
     }
+
+    // Verificar que la calificación pertenece al cliente autenticado
+    if (calificacion.clienteId.toString() !== cliente._id.toString()) {
+      return res.status(403).json({
+        mensaje: 'No tienes permisos para eliminar esta calificación'
+      });
+    }
+
+    // Eliminar la calificación
+    await Calificacion.findByIdAndDelete(req.params.id);
+    
     res.status(200).json({
       mensaje: 'Calificación eliminada exitosamente'
     });

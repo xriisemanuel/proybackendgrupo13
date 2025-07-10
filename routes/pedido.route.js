@@ -2,21 +2,22 @@
 const express = require('express');
 const router = express.Router();
 const pedidoController = require('../controllers/pedido.controller');
+const authMiddleware = require('../middleware/auth'); // Habilitar middleware de autenticación
 
 // Rutas CRUD para Pedidos
-router.post('/', pedidoController.crearPedido);
-router.get('/', pedidoController.listarPedidos); // Ajustar roles según tu lógica
-router.get('/:id', pedidoController.obtenerPedidoPorId);
-router.put('/:id', pedidoController.actualizarPedido);
-router.delete('/:id', pedidoController.eliminarPedido);
+router.post('/', authMiddleware.autenticar, authMiddleware.autorizar(['cliente']), pedidoController.crearPedido);
+router.get('/', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_cocina', 'supervisor_ventas', 'repartidor', 'cliente']), pedidoController.listarPedidos);
+router.get('/:id', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_cocina', 'supervisor_ventas', 'repartidor', 'cliente']), pedidoController.obtenerPedidoPorId);
+router.put('/:id', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_ventas', 'repartidor']), pedidoController.actualizarPedido);
+router.delete('/:id', authMiddleware.autenticar, authMiddleware.autorizar(['admin']), pedidoController.eliminarPedido);
 
 // Rutas de funcionalidades específicas de Pedidos
-router.get('/estado/:estado', pedidoController.getPedidosEstado);
-router.get('/cliente/:clienteId', pedidoController.getPedidosCliente);
-router.get('/filtrados', pedidoController.getPedidosFiltrados); // Usará query params
+router.get('/estado/:estado', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_cocina', 'supervisor_ventas']), pedidoController.getPedidosEstado);
+router.get('/cliente/:clienteId', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_cocina', 'supervisor_ventas', 'cliente']), pedidoController.getPedidosCliente);
+router.get('/filtrados', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_cocina', 'supervisor_ventas']), pedidoController.getPedidosFiltrados);
 
-router.patch('/:id/estado', pedidoController.cambiarEstado); // Roles que pueden cambiar estado
-router.patch('/:id/asignar-repartidor', pedidoController.asignarRepartidor);
-router.patch('/:id/aplicar-descuentos', pedidoController.aplicarDescuentos);
+router.patch('/:id/estado', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_cocina', 'supervisor_ventas']), pedidoController.cambiarEstado);
+router.patch('/:id/asignar-repartidor', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_ventas', 'repartidor']), pedidoController.asignarRepartidor);
+router.patch('/:id/aplicar-descuentos', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_ventas']), pedidoController.aplicarDescuentos);
 
 module.exports = router;

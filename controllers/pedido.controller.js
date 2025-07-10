@@ -132,7 +132,12 @@ exports.listarPedidos = async (req, res) => {
             if (!repartidorAsociado) {
                 return res.status(403).json({ mensaje: 'No se pudo asociar un repartidor válido para ver pedidos.' });
             }
-            query.repartidorId = repartidorAsociado._id;
+            // Los repartidores pueden ver pedidos asignados a ellos O pedidos disponibles para tomar
+            // (estados en_envio sin repartidor asignado)
+            query.$or = [
+                { repartidorId: repartidorAsociado._id },
+                { estado: 'en_envio', repartidorId: null }
+            ];
         } else if (!['admin', 'supervisor_cocina', 'supervisor_ventas'].includes(userRole)) {
             // Otros roles no especificados no tienen acceso directo a listar todos los pedidos
             return res.status(403).json({ mensaje: 'Acceso denegado. No tiene permisos para listar pedidos.' });
@@ -230,16 +235,47 @@ exports.obtenerPedidoPorId = async (req, res) => {
 };
 
 exports.actualizarPedido = async (req, res) => {
-  // Solo Administrador, Supervisor de Ventas, o Supervisor de Cocina pueden actualizar un pedido
-  // (Supervisor de Cocina y Repartidor tienen su propia función de cambiarEstado para casos específicos)
-  const allowedRoles = ['admin', 'supervisor_ventas'];
+  // Solo Administrador, Supervisor de Ventas, o Repartidor pueden actualizar un pedido
+  // (Repartidor puede actualizar para asignarse a pedidos)
+  const allowedRoles = ['admin', 'supervisor_ventas', 'repartidor'];
   if (!allowedRoles.includes(req.usuario.rol)) {
-    return res.status(403).json({ mensaje: 'Acceso denegado. Solo administradores o supervisores de ventas pueden actualizar pedidos de forma general.' });
+    return res.status(403).json({ mensaje: 'Acceso denegado. Solo administradores, supervisores de ventas o repartidores pueden actualizar pedidos.' });
   }
 
   try {
     const { id } = req.params;
     const updateData = req.body;
+    const userRole = req.usuario.rol;
+    const userId = req.usuario._id;
+
+    // Lógica de autorización específica para repartidores
+    if (userRole === 'repartidor') {
+      const repartidorAsociado = await Repartidor.findOne({ usuarioId: userId });
+      if (!repartidorAsociado) {
+        return res.status(403).json({ mensaje: 'No se pudo asociar un repartidor válido.' });
+      }
+
+      // Los repartidores solo pueden actualizar pedidos que:
+      // 1. Estén asignados a ellos, O
+      // 2. No tengan repartidor asignado y estén en estado 'en_envio'
+      const pedido = await Pedido.findById(id);
+      if (!pedido) {
+        return res.status(404).json({ mensaje: 'Pedido no encontrado para actualizar' });
+      }
+
+      const puedeActualizar = 
+        (pedido.repartidorId && pedido.repartidorId.toString() === repartidorAsociado._id.toString()) ||
+        (!pedido.repartidorId && pedido.estado === 'en_envio');
+
+      if (!puedeActualizar) {
+        return res.status(403).json({ mensaje: 'Acceso denegado. No puede actualizar este pedido.' });
+      }
+
+      // Si el repartidor se está asignando al pedido, actualizar el repartidorId
+      if (!pedido.repartidorId && updateData.repartidorId) {
+        updateData.repartidorId = repartidorAsociado._id;
+      }
+    }
 
     const pedidoActualizado = await Pedido.findByIdAndUpdate(id, updateData, {
       new: true, // Devuelve el documento actualizado
@@ -438,22 +474,30 @@ exports.cambiarEstado = async (req, res) => {
         break;
       case 'supervisor_cocina':
         // El supervisor de cocina puede cambiar estados relacionados con la preparación
-        const estadosCocina = ['recibido', 'confirmado', 'en_preparacion', 'listo_para_entrega'];
+        const estadosCocina = ['pendiente', 'confirmado', 'en_preparacion', 'en_envio'];
         if (estadosCocina.includes(pedido.estado) && estadosCocina.includes(nuevoEstado)) {
           canChange = true;
-        } else if (nuevoEstado === 'cancelado') { // Un supervisor de cocina podría cancelar pedidos
+        } else if (nuevoEstado === 'cancelado') { // Un supervisor de cocina puede cancelar pedidos
           canChange = true;
         }
         break;
       case 'repartidor':
-        // El repartidor solo puede cambiar estados de entrega
-        const estadosRepartidor = ['listo_para_entrega', 'en_delivery', 'entregado', 'fallido'];
+        // El repartidor puede cambiar estados de entrega
+        const estadosRepartidor = ['en_envio', 'entregado'];
         const repartidorAsociado = await Repartidor.findOne({ usuarioId: userId });
 
-        // Asegurarse de que el pedido esté asignado a este repartidor
-        if (repartidorAsociado && pedido.repartidorId && pedido.repartidorId.toString() === repartidorAsociado._id.toString()) {
-          if (estadosRepartidor.includes(pedido.estado) && estadosRepartidor.includes(nuevoEstado)) {
+        if (repartidorAsociado) {
+          // Si el pedido está asignado al repartidor, puede cambiar estados de entrega
+          if (pedido.repartidorId && pedido.repartidorId.toString() === repartidorAsociado._id.toString()) {
+            if (estadosRepartidor.includes(pedido.estado) && estadosRepartidor.includes(nuevoEstado)) {
+              canChange = true;
+            }
+          }
+          // Si el pedido no está asignado y está en en_envio, el repartidor puede tomarlo
+          else if (!pedido.repartidorId && pedido.estado === 'en_envio' && nuevoEstado === 'en_envio') {
+            // Permitir que el repartidor se asigne al pedido
             canChange = true;
+            pedido.repartidorId = repartidorAsociado._id;
           }
         }
         break;
@@ -513,7 +557,7 @@ exports.asignarRepartidor = async (req, res) => {
 
     pedido.repartidorId = repartidorId;
     pedido.fechaEstimadaEntrega = fechaEstimadaEntrega ? new Date(fechaEstimadaEntrega) : null;
-    pedido.estado = 'en_delivery'; // Sugerencia de cambio de estado al asignar repartidor
+    pedido.estado = 'en_envio'; // Cambio de estado al asignar repartidor
     await pedido.save();
 
     // Opcional: Notificar al repartidor (ej. SMS) o cliente
