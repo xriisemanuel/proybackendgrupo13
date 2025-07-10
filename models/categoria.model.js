@@ -20,6 +20,7 @@ const categoriaSchema = new Schema({
     type: String,
     trim: true,
     default: null,
+    maxlength: [2048, 'La URL de la imagen no puede exceder los 2048 caracteres.'],
     // Puedes añadir una validación regex para URL si es necesario
   },
   estado: { // Indica si la categoría está activa/visible. False para inactiva/archivada.

@@ -145,19 +145,31 @@ exports.eliminarCategoria = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Antes de eliminar, verificar si hay productos asociados
+    // Obtener la categoría para verificar su estado
+    const categoria = await Categoria.findById(id);
+    if (!categoria) {
+      return res.status(404).json({ mensaje: 'Categoría no encontrada para eliminar.' });
+    }
+
+    // Verificar si hay productos asociados
     const productosAsociados = await Producto.countDocuments({ categoriaId: id });
+    
     if (productosAsociados > 0) {
       return res.status(400).json({
-        mensaje: `No se puede eliminar la categoría. Existen ${productosAsociados} productos asociados a ella.`,
-        sugerencia: 'Desactive la categoría o reasigne los productos a otra categoría antes de intentar eliminarla.'
+        mensaje: `No se puede eliminar. Hay ${productosAsociados} productos asociados.`,
+        sugerencia: 'Reasigne los productos a otra categoría primero.'
+      });
+    }
+
+    // Si la categoría está activa y no tiene productos, sugerir desactivarla primero
+    if (categoria.estado === true) {
+      return res.status(400).json({
+        mensaje: 'No se puede eliminar una categoría activa.',
+        sugerencia: 'Desactive la categoría primero, luego elimínela.'
       });
     }
 
     const categoriaEliminada = await Categoria.findByIdAndDelete(id);
-    if (!categoriaEliminada) {
-      return res.status(404).json({ mensaje: 'Categoría no encontrada para eliminar.' });
-    }
     res.status(200).json({
       mensaje: 'Categoría eliminada exitosamente.'
     });
@@ -246,6 +258,15 @@ exports.desactivarCategoria = async (req, res) => {
     const categoria = await Categoria.findById(id);
     if (!categoria) {
       return res.status(404).json({ mensaje: 'Categoría no encontrada.' });
+    }
+
+    // Verificar si hay productos asociados antes de desactivar
+    const productosAsociados = await Producto.countDocuments({ categoriaId: id });
+    if (productosAsociados > 0) {
+      return res.status(400).json({
+        mensaje: `No se puede desactivar. Hay ${productosAsociados} productos asociados.`,
+        sugerencia: 'Reasigne los productos a otra categoría primero.'
+      });
     }
 
     await categoria.desactivar(); // Usa el método de instancia definido en el modelo
