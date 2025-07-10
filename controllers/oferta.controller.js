@@ -11,7 +11,7 @@ const Categoria = require('../models/categoria.model'); // Para validar categorÃ
  */
 exports.crearOferta = async (req, res) => {
   try {
-    const { nombre, descripcion, descuento, fechaInicio, fechaFin, productosAplicables, categoriasAplicables } = req.body;
+    const { nombre, descripcion, imagen, descuento, fechaInicio, fechaFin, productosAplicables, categoriasAplicables } = req.body;
 
     // Validar productosAplicables si se proporcionan
     if (productosAplicables && productosAplicables.length > 0) {
@@ -32,6 +32,7 @@ exports.crearOferta = async (req, res) => {
     const nuevaOferta = new Oferta({
       nombre,
       descripcion,
+      imagen,
       descuento,
       fechaInicio: fechaInicio || Date.now(), // Usa la fecha actual si no se proporciona
       fechaFin,

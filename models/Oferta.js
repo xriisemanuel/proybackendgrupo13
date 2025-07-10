@@ -16,6 +16,11 @@ const ofertaSchema = new Schema({
     default: null,
     maxlength: [500, 'La descripción de la oferta no puede exceder los 500 caracteres.'],
   },
+  imagen: {
+    type: String,
+    required: [true, 'La imagen de la oferta es obligatoria.'],
+    trim: true,
+  },
   descuento: { // Porcentaje de descuento (ej. 10 para 10%)
     type: Number,
     required: [true, 'El porcentaje de descuento es obligatorio.'],
