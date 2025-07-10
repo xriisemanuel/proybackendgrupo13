@@ -7,6 +7,7 @@ const rolSchema = new mongoose.Schema({
     unique: true,
     trim: true,
     lowercase: true, // Convierte el nombre a minúsculas para evitar duplicados
+    match: [/^[a-zA-Z\s]*$/,'El nombre del rol solo puede contener letras y espacios.']
   },
   estado: {
     type: Boolean,
