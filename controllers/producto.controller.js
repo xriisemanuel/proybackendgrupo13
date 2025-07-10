@@ -5,24 +5,40 @@ const Categoria = require('../models/categoria.model'); // Para verificar si la 
 // Obtener todos los productos
 exports.getProducts = async (req, res) => {
   try {
-    // Usamos .populate('categoriaId') para obtener los detalles completos de la categoría
-    // 'nombre descripcion' son los campos que quieres de la categoría
-    const products = await Producto.find().populate('categoriaId', 'nombre descripcion');
-    res.status(200).json(products);
+    const products = await Producto.find()
+  .select('nombre descripcion precio categoriaId stock disponible popularidad imagen') // 👈 asegurás que 'imagen' esté incluido
+  .populate('categoriaId', 'nombre descripcion');
+
+res.status(200).json(products);
+
+
+    res.status(200).json(productosConImagen);
   } catch (error) {
     console.error('Error al obtener productos:', error);
     res.status(500).json({ mensaje: 'Error interno del servidor al obtener productos.' });
   }
 };
 
-// Obtener un producto por ID
 exports.getProductById = async (req, res) => {
   try {
     const product = await Producto.findById(req.params.id).populate('categoriaId', 'nombre descripcion');
     if (!product) {
       return res.status(404).json({ mensaje: 'Producto no encontrado.' });
     }
-    res.status(200).json(product);
+
+    const productoConImagen = {
+      _id: product._id,
+      nombre: product.nombre,
+      descripcion: product.descripcion,
+      precio: product.precio,
+      categoriaId: product.categoriaId,
+      stock: product.stock,
+      disponible: product.disponible,
+      popularidad: product.popularidad,
+      imagen: product.imagen || null
+    };
+
+    res.status(200).json(productoConImagen);
   } catch (error) {
     console.error('Error al obtener producto por ID:', error);
     if (error.name === 'CastError') {
@@ -31,6 +47,7 @@ exports.getProductById = async (req, res) => {
     res.status(500).json({ mensaje: 'Error interno del servidor al obtener el producto.' });
   }
 };
+
 
 // Crear un nuevo producto
 exports.createProduct = async (req, res) => {
@@ -54,7 +71,7 @@ exports.createProduct = async (req, res) => {
       descripcion,
       precio,
       categoriaId, // <<<< Usamos categoriaId
-      imagenes: imagenes || [],
+      imagenes,
       disponible: disponible !== undefined ? disponible : (stock > 0), // El hook pre-save también lo manejará
       stock,
       popularidad: popularidad !== undefined ? popularidad : 0
@@ -145,5 +162,38 @@ exports.deleteProduct = async (req, res) => {
       return res.status(400).json({ mensaje: 'ID de producto inválido.' });
     }
     res.status(500).json({ mensaje: 'Error interno del servidor al eliminar el producto.', error: error.message });
+  }
+};
+exports.activarProducto = async (req, res) => {
+  try {
+    const producto = await Producto.findByIdAndUpdate(
+      req.params.id,
+      { disponible: true },
+      { new: true }
+    );
+    if (!producto) {
+      return res.status(404).json({ mensaje: 'Producto no encontrado.' });
+    }
+    res.status(200).json({ mensaje: 'Producto activado correctamente.', producto });
+  } catch (error) {
+    console.error('Error al activar producto:', error);
+    res.status(500).json({ mensaje: 'Error interno del servidor.' });
+  }
+};
+
+exports.desactivarProducto = async (req, res) => {
+  try {
+    const producto = await Producto.findByIdAndUpdate(
+      req.params.id,
+      { disponible: false },
+      { new: true }
+    );
+    if (!producto) {
+      return res.status(404).json({ mensaje: 'Producto no encontrado.' });
+    }
+    res.status(200).json({ mensaje: 'Producto desactivado correctamente.', producto });
+  } catch (error) {
+    console.error('Error al desactivar producto:', error);
+    res.status(500).json({ mensaje: 'Error interno del servidor.' });
   }
 };

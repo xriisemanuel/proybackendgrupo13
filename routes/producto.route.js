@@ -14,5 +14,11 @@ router.get('/:id', productController.getProductById); // Obtener un producto por
 router.post('/', autenticar, autorizar(['admin']), productController.createProduct); // Crear un nuevo producto
 router.put('/:id', autenticar, autorizar(['admin']), productController.updateProduct); // Actualizar un producto
 router.delete('/:id', autenticar, autorizar(['admin']), productController.deleteProduct); // Eliminar un producto
+// Activar producto
+router.patch('/:id/activar', autenticar, autorizar(['admin']), productController.activarProducto);
+
+// Desactivar producto
+router.patch('/:id/desactivar', autenticar, autorizar(['admin']), productController.desactivarProducto);
+
 
 module.exports = router;
