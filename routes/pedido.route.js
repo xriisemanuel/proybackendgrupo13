@@ -16,7 +16,7 @@ router.get('/estado/:estado', authMiddleware.autenticar, authMiddleware.autoriza
 router.get('/cliente/:clienteId', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_cocina', 'supervisor_ventas', 'cliente']), pedidoController.getPedidosCliente);
 router.get('/filtrados', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_cocina', 'supervisor_ventas']), pedidoController.getPedidosFiltrados);
 
-router.patch('/:id/estado', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_cocina', 'supervisor_ventas']), pedidoController.cambiarEstado);
+router.patch('/:id/estado', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_cocina', 'supervisor_ventas', 'repartidor']), pedidoController.cambiarEstado);
 router.patch('/:id/asignar-repartidor', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_ventas', 'repartidor']), pedidoController.asignarRepartidor);
 router.patch('/:id/aplicar-descuentos', authMiddleware.autenticar, authMiddleware.autorizar(['admin', 'supervisor_ventas']), pedidoController.aplicarDescuentos);
 

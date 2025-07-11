@@ -457,7 +457,8 @@ exports.getPedidosFiltrados = async (req, res) => {
 
 exports.cambiarEstado = async (req, res) => {
   const { id } = req.params;
-  const { nuevoEstado } = req.body;
+  // Permitir ambos nombres de campo para compatibilidad
+  const nuevoEstado = req.body.nuevoEstado || req.body.estado;
   const userRole = req.usuario.rol;
   const userId = req.usuario._id;
 
