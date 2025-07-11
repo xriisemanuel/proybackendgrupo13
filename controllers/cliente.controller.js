@@ -2,6 +2,7 @@
 const Cliente = require('../models/cliente.model');
 const Usuario = require('../models/usuario'); // Necesario para verificar usuarios si es necesario
 const Rol = require('../models/rol'); // Necesario para verificar roles si es necesario
+const bcrypt = require('bcryptjs');
 
 /**
  * @desc Obtener todos los perfiles de clientes
@@ -301,5 +302,66 @@ exports.getClienteByUsuarioId = async (req, res) => {
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
+  }
+};
+
+/**
+ * @desc Cambiar la contraseña del usuario asociado a un cliente
+ * @route POST /api/cliente/:id/cambiar-password
+ * @access Cliente (para su propio perfil), Admin
+ * @body {string} currentPassword - Contraseña actual
+ * @body {string} newPassword - Nueva contraseña
+ * @body {string} confirmPassword - Confirmación de la nueva contraseña
+ */
+exports.cambiarPassword = async (req, res) => {
+  try {
+    const clienteId = req.params.id;
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (!newPassword || !confirmPassword) {
+      return res.status(400).json({ mensaje: 'La nueva contraseña y la confirmación son obligatorias.' });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ mensaje: 'La nueva contraseña y la confirmación no coinciden.' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ mensaje: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+    }
+
+    // Buscar el cliente y el usuario asociado
+    const cliente = await Cliente.findById(clienteId).populate('usuarioId');
+    if (!cliente) {
+      return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado.' });
+    }
+    const usuario = cliente.usuarioId;
+    if (!usuario) {
+      return res.status(404).json({ mensaje: 'Usuario asociado no encontrado.' });
+    }
+
+    // Si el usuario es OAuth (googleId), no permitir cambio de contraseña local
+    if (usuario.googleId) {
+      return res.status(400).json({ mensaje: 'No puedes cambiar la contraseña de una cuenta de Google.' });
+    }
+
+    // Si no es admin, validar la contraseña actual
+    if (!req.usuario || req.usuario.rol !== 'admin') {
+      if (!currentPassword) {
+        return res.status(400).json({ mensaje: 'Debes ingresar la contraseña actual.' });
+      }
+      const esValida = await usuario.compararPassword(currentPassword);
+      if (!esValida) {
+        return res.status(400).json({ mensaje: 'La contraseña actual es incorrecta.' });
+      }
+    }
+
+    // Hashear y guardar la nueva contraseña
+    const hashed = await bcrypt.hash(newPassword, 10);
+    usuario.password = hashed;
+    await usuario.save();
+
+    res.json({ mensaje: 'Contraseña actualizada exitosamente.' });
+  } catch (error) {
+    console.error('Error al cambiar contraseña:', error);
+    res.status(500).json({ mensaje: 'Error al cambiar la contraseña.', error: error.message });
   }
 };
