@@ -5,6 +5,10 @@ const { autenticar, autorizar } = require('../middleware/auth');
 
 // Rutas públicas (GET)
 router.get('/', ofertaController.obtenerOfertas);
+// Obtener todos los productos en oferta con la información de la oferta aplicada
+router.get('/productos-en-oferta', ofertaController.obtenerProductosEnOferta);
+
+// Rutas de obtención de ofertas individuales
 router.get('/:id', ofertaController.obtenerOfertaPorId);
 router.get('/producto/:productId', ofertaController.obtenerOfertasPorProducto);
 
