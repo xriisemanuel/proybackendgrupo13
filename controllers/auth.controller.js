@@ -5,8 +5,24 @@ const Repartidor = require('../models/Repartidor');
 const Rol = require('../models/rol');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const { OAuth2Client } = require('google-auth-library');
 
-const JWT_SECRET = process.env.JWT_SECRET || '1234567890'; // Usar una variable de entorno o un valor por defecto
+// Cargar configuración
+let config;
+try {
+  config = require('../config.js');
+} catch (error) {
+  console.warn('No se pudo cargar config.js, usando variables de entorno por defecto');
+  config = {
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || 'your-google-client-id',
+    JWT_SECRET: process.env.JWT_SECRET || '1234567890'
+  };
+}
+
+const JWT_SECRET = config.JWT_SECRET;
+const GOOGLE_CLIENT_ID = config.GOOGLE_CLIENT_ID;
+
+console.log('Google Client ID configurado:', GOOGLE_CLIENT_ID);
 
 /**
  * @desc Registra un nuevo usuario en el sistema, creando también su perfil de rol específico si aplica.
@@ -206,5 +222,147 @@ exports.loginUser = async (req, res) => {
   } catch (error) {
     console.error('Error en el inicio de sesión:', error);
     res.status(500).json({ mensaje: 'Error en el servidor.', error: error.message });
+  }
+};
+
+/**
+ * @desc Inicia sesión con Google OAuth
+ * @route POST /api/auth/google
+ * @access Public
+ * @body {string} idToken - Token de ID de Google
+ */
+exports.googleLogin = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ mensaje: 'Token de Google requerido.' });
+    }
+
+    // Verificar el token de Google
+    const client = new OAuth2Client(GOOGLE_CLIENT_ID);
+    const ticket = await client.verifyIdToken({
+      idToken: idToken,
+      audience: GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name, given_name, family_name, picture, sub: googleId } = payload;
+
+    console.log('Google OAuth payload:', { email, name, given_name, family_name, googleId });
+
+    // Buscar si el usuario ya existe por email
+    let user = await Usuario.findOne({ email }).populate('rolId');
+
+    if (!user) {
+      // Si el usuario no existe, crear uno nuevo con rol de cliente por defecto
+      console.log('Usuario no encontrado, creando nuevo usuario con Google OAuth');
+      
+      // Buscar el rol de cliente
+      const clienteRol = await Rol.findOne({ nombre: 'cliente' });
+      if (!clienteRol) {
+        return res.status(500).json({ mensaje: 'Error: Rol de cliente no encontrado en el sistema.' });
+      }
+
+      // Crear el nuevo usuario
+      user = new Usuario({
+        username: email, // Usar email como username
+        email: email,
+        nombre: given_name || name.split(' ')[0] || '',
+        apellido: family_name || name.split(' ').slice(1).join(' ') || '',
+        rolId: clienteRol._id,
+        estado: true,
+        googleId: googleId, // Guardar el ID de Google para futuras referencias
+        // No se establece password ya que es autenticación OAuth
+      });
+
+      await user.save();
+
+      // Crear perfil de cliente por defecto
+      const newCliente = new Cliente({
+        usuarioId: user._id,
+        direccion: 'Dirección pendiente de configuración', // Dirección por defecto
+        fechaNacimiento: null,
+        preferenciasAlimentarias: [],
+        puntos: 0
+      });
+
+      await newCliente.save();
+      user.clienteId = newCliente._id;
+      await user.save();
+
+      console.log('Nuevo usuario creado con Google OAuth:', user._id);
+    } else {
+      // Si el usuario existe, actualizar información de Google si es necesario
+      if (!user.googleId) {
+        user.googleId = googleId;
+        await user.save();
+        console.log('Google ID agregado a usuario existente:', user._id);
+      }
+    }
+
+    // Generar JWT
+    const token = jwt.sign(
+      { _id: user._id, rol: user.rolId.nombre },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.json({
+      mensaje: 'Inicio de sesión con Google exitoso',
+      token,
+      usuario: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        nombre: user.nombre,
+        apellido: user.apellido,
+        rol: user.rolId.nombre,
+        picture: picture // URL de la imagen de perfil de Google
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en Google OAuth login:', error);
+    
+    if (error.message.includes('Token used too late')) {
+      return res.status(400).json({ mensaje: 'Token de Google expirado. Por favor, intenta de nuevo.' });
+    }
+    
+    if (error.message.includes('Invalid token')) {
+      return res.status(400).json({ mensaje: 'Token de Google inválido.' });
+    }
+
+    res.status(500).json({ 
+      mensaje: 'Error al procesar el inicio de sesión con Google.',
+      error: error.message 
+    });
+  }
+};
+
+/**
+ * @desc Obtiene la URL de autorización de Google OAuth
+ * @route GET /api/auth/google/url
+ * @access Public
+ */
+exports.getGoogleAuthUrl = async (req, res) => {
+  try {
+    const client = new OAuth2Client(GOOGLE_CLIENT_ID);
+    const authUrl = client.generateAuthUrl({
+      access_type: 'offline',
+      scope: [
+        'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/userinfo.email'
+      ],
+      prompt: 'consent'
+    });
+
+    res.json({ authUrl });
+  } catch (error) {
+    console.error('Error generando URL de Google OAuth:', error);
+    res.status(500).json({ 
+      mensaje: 'Error al generar URL de autorización de Google.',
+      error: error.message 
+    });
   }
 };
