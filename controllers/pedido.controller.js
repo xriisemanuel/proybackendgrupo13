@@ -158,9 +158,12 @@ exports.listarPedidos = async (req, res) => {
         // Filtrar por estados (ej. ?estados=en_envio,confirmado)
         // El frontend enviará esto como `?estados=confirmado,en_preparacion,en_envio`
         if (req.query.estados) {
+            console.log('Estados recibidos en backend:', req.query.estados); // Debug
             const estadosArray = req.query.estados.split(',');
+            console.log('Estados array en backend:', estadosArray); // Debug
             // Usamos $in para buscar cualquiera de los estados en el array
             query.estado = { $in: estadosArray };
+            console.log('Query final en backend:', JSON.stringify(query)); // Debug
         }
 
         // También considera otros filtros que ya tienes en getPedidosFiltrados
@@ -180,6 +183,9 @@ exports.listarPedidos = async (req, res) => {
             // si los necesitas en el frontend, como en tu interfaz IRepartidorPopulated.
             // Actualmente tienes 'nombre' y 'apellido' en RepartidorService, pero aquí solo populas 'nombre'.
             .populate('repartidorId', 'nombre apellido telefono'); // Añade 'apellido' y 'telefono' aquí
+
+        console.log('Pedidos encontrados en backend:', pedidos.length); // Debug
+        console.log('Estados de pedidos encontrados:', pedidos.map(p => p.estado)); // Debug
 
         res.status(200).json(pedidos);
     } catch (error) {
