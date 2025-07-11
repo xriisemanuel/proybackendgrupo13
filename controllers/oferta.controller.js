@@ -1,8 +1,8 @@
 const Oferta = require('../models/Oferta');
-const Producto = require('../models/producto'); // Para validar productos
-const Categoria = require('../models/categoria.model'); // Para validar categorías
+const Producto = require('../models/producto');
+const Categoria = require('../models/categoria.model');
 
-// --- Funciones CRUD y de Negocio ---
+// Funciones CRUD y de Negocio
 
 /**
  * @route POST /api/ofertas
@@ -11,18 +11,38 @@ const Categoria = require('../models/categoria.model'); // Para validar categor�
  */
 exports.crearOferta = async (req, res) => {
   try {
-    const { nombre, descripcion, imagen, descuento, fechaInicio, fechaFin, productosAplicables, categoriasAplicables } = req.body;
+    const { 
+      nombre, 
+      descripcion, 
+      porcentajeDescuento,
+      fechaInicio, 
+      fechaFin, 
+      tipoOferta,
+      productosAplicables, 
+      categoriasAplicables 
+    } = req.body;
 
-    // Validar productosAplicables si se proporcionan
-    if (productosAplicables && productosAplicables.length > 0) {
+    // Validar tipo de oferta
+    if (!tipoOferta || !['producto', 'categoria'].includes(tipoOferta)) {
+      return res.status(400).json({ mensaje: 'El tipo de oferta debe ser "producto" o "categoria".' });
+    }
+
+    // Validar productos si es oferta de producto
+    if (tipoOferta === 'producto') {
+      if (!productosAplicables || productosAplicables.length === 0) {
+        return res.status(400).json({ mensaje: 'Para ofertas de producto, debe especificar al menos un producto.' });
+      }
       const productosExistentes = await Producto.countDocuments({ _id: { $in: productosAplicables } });
       if (productosExistentes !== productosAplicables.length) {
         return res.status(400).json({ mensaje: 'Uno o más IDs de productos aplicables no son válidos.' });
       }
     }
 
-    // Validar categoriasAplicables si se proporcionan
-    if (categoriasAplicables && categoriasAplicables.length > 0) {
+    // Validar categorías si es oferta de categoría
+    if (tipoOferta === 'categoria') {
+      if (!categoriasAplicables || categoriasAplicables.length === 0) {
+        return res.status(400).json({ mensaje: 'Para ofertas de categoría, debe especificar al menos una categoría.' });
+      }
       const categoriasExistentes = await Categoria.countDocuments({ _id: { $in: categoriasAplicables } });
       if (categoriasExistentes !== categoriasAplicables.length) {
         return res.status(400).json({ mensaje: 'Uno o más IDs de categorías aplicables no son válidos.' });
@@ -32,13 +52,13 @@ exports.crearOferta = async (req, res) => {
     const nuevaOferta = new Oferta({
       nombre,
       descripcion,
-      imagen,
-      descuento,
-      fechaInicio: fechaInicio || Date.now(), // Usa la fecha actual si no se proporciona
+      porcentajeDescuento,
+      fechaInicio: fechaInicio || Date.now(),
       fechaFin,
-      productosAplicables: productosAplicables || [],
-      categoriasAplicables: categoriasAplicables || [],
-      activa: true, // Las ofertas se crean activas por defecto
+      tipoOferta,
+      productosAplicables: tipoOferta === 'producto' ? productosAplicables : [],
+      categoriasAplicables: tipoOferta === 'categoria' ? categoriasAplicables : [],
+      activa: true
     });
 
     await nuevaOferta.save();
@@ -48,10 +68,10 @@ exports.crearOferta = async (req, res) => {
       oferta: nuevaOferta
     });
   } catch (error) {
-    if (error.code === 11000) { // Error de clave duplicada (nombre único)
+    if (error.code === 11000) {
       return res.status(409).json({ mensaje: 'Ya existe una oferta con este nombre.', detalle: error.message });
     }
-    if (error.name === 'ValidationError') { // Errores de validación de Mongoose
+    if (error.name === 'ValidationError') {
       return res.status(400).json({ mensaje: 'Error de validación al crear la oferta.', detalle: error.message });
     }
     console.error('Error al crear la oferta:', error);
@@ -66,8 +86,6 @@ exports.crearOferta = async (req, res) => {
  * @route GET /api/ofertas
  * @desc Obtiene todas las ofertas (opcionalmente filtradas por estado o vigencia)
  * @access Público
- * @queryParam activa (boolean): true para activas, false para inactivas
- * @queryParam vigente (boolean): true para ofertas actualmente vigentes
  */
 exports.obtenerOfertas = async (req, res) => {
   try {
@@ -77,8 +95,8 @@ exports.obtenerOfertas = async (req, res) => {
     }
 
     let ofertas = await Oferta.find(query)
-      .populate('productosAplicables', 'nombre precio') // Popula nombre y precio de productos
-      .populate('categoriasAplicables', 'nombre') // Popula nombre de categorías
+      .populate('productosAplicables', 'nombre precio imagen')
+      .populate('categoriasAplicables', 'nombre')
       .sort({ fechaInicio: -1 });
 
     // Filtrar por vigencia después de la consulta de base de datos
@@ -105,7 +123,7 @@ exports.obtenerOfertas = async (req, res) => {
 exports.obtenerOfertaPorId = async (req, res) => {
   try {
     const oferta = await Oferta.findById(req.params.id)
-      .populate('productosAplicables', 'nombre precio')
+      .populate('productosAplicables', 'nombre precio imagen')
       .populate('categoriasAplicables', 'nombre');
 
     if (!oferta) {
@@ -134,8 +152,13 @@ exports.editarOferta = async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    // Validar productosAplicables si se actualizan
-    if (updateData.productosAplicables) {
+    // Validar tipo de oferta si se actualiza
+    if (updateData.tipoOferta && !['producto', 'categoria'].includes(updateData.tipoOferta)) {
+      return res.status(400).json({ mensaje: 'El tipo de oferta debe ser "producto" o "categoria".' });
+    }
+
+    // Validar productos si es oferta de producto
+    if (updateData.tipoOferta === 'producto' || (updateData.productosAplicables && updateData.productosAplicables.length > 0)) {
       if (!Array.isArray(updateData.productosAplicables)) {
         return res.status(400).json({ mensaje: 'productosAplicables debe ser un array.' });
       }
@@ -145,8 +168,8 @@ exports.editarOferta = async (req, res) => {
       }
     }
 
-    // Validar categoriasAplicables si se actualizan
-    if (updateData.categoriasAplicables) {
+    // Validar categorías si es oferta de categoría
+    if (updateData.tipoOferta === 'categoria' || (updateData.categoriasAplicables && updateData.categoriasAplicables.length > 0)) {
       if (!Array.isArray(updateData.categoriasAplicables)) {
         return res.status(400).json({ mensaje: 'categoriasAplicables debe ser un array.' });
       }
@@ -157,8 +180,8 @@ exports.editarOferta = async (req, res) => {
     }
 
     const ofertaActualizada = await Oferta.findByIdAndUpdate(id, updateData, {
-      new: true, // Devuelve el documento actualizado
-      runValidators: true // Corre las validaciones definidas en el esquema
+      new: true,
+      runValidators: true
     });
 
     if (!ofertaActualizada) {
@@ -169,10 +192,10 @@ exports.editarOferta = async (req, res) => {
       oferta: ofertaActualizada
     });
   } catch (error) {
-    if (error.code === 11000) { // Error de clave duplicada (nombre único)
+    if (error.code === 11000) {
       return res.status(409).json({ mensaje: 'Ya existe otra oferta con el nombre proporcionado.', detalle: error.message });
     }
-    if (error.name === 'ValidationError') { // Errores de validación de Mongoose
+    if (error.name === 'ValidationError') {
       return res.status(400).json({ mensaje: 'Error de validación al actualizar la oferta.', detalle: error.message });
     }
     if (error.name === 'CastError') {
@@ -198,7 +221,8 @@ exports.borrarOfertaPorId = async (req, res) => {
       return res.status(404).json({ mensaje: 'Oferta no encontrada para eliminar.' });
     }
     res.status(200).json({
-      mensaje: 'Oferta eliminada exitosamente.'
+      mensaje: 'Oferta eliminada exitosamente.',
+      oferta: ofertaEliminada
     });
   } catch (error) {
     if (error.name === 'CastError') {
@@ -218,25 +242,31 @@ exports.borrarOfertaPorId = async (req, res) => {
  * @access Admin
  */
 exports.activarOferta = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const oferta = await Oferta.findById(id);
-        if (!oferta) {
-            return res.status(404).json({ mensaje: 'Oferta no encontrada.' });
-        }
-        if (oferta.activa) {
-            return res.status(200).json({ mensaje: 'La oferta ya está activa.', oferta });
-        }
-        oferta.activa = true;
-        await oferta.save();
-        res.status(200).json({ mensaje: 'Oferta activada exitosamente.', oferta });
-    } catch (error) {
-        if (error.name === 'CastError') {
-            return res.status(400).json({ mensaje: 'ID de oferta inválido.', detalle: error.message });
-        }
-        console.error('Error al activar oferta:', error);
-        res.status(500).json({ mensaje: 'Error interno del servidor al activar oferta.', error: error.message });
+  try {
+    const oferta = await Oferta.findByIdAndUpdate(
+      req.params.id,
+      { activa: true },
+      { new: true }
+    );
+
+    if (!oferta) {
+      return res.status(404).json({ mensaje: 'Oferta no encontrada.' });
     }
+
+    res.status(200).json({
+      mensaje: 'Oferta activada exitosamente.',
+      oferta: oferta
+    });
+  } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ mensaje: 'ID de oferta inválido.', detalle: error.message });
+    }
+    console.error('Error al activar la oferta:', error);
+    res.status(500).json({
+      mensaje: 'Error interno del servidor al activar la oferta.',
+      error: error.message
+    });
+  }
 };
 
 /**
@@ -245,61 +275,65 @@ exports.activarOferta = async (req, res) => {
  * @access Admin
  */
 exports.desactivarOferta = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const oferta = await Oferta.findById(id);
-        if (!oferta) {
-            return res.status(404).json({ mensaje: 'Oferta no encontrada.' });
-        }
-        if (!oferta.activa) {
-            return res.status(200).json({ mensaje: 'La oferta ya está inactiva.', oferta });
-        }
-        oferta.activa = false;
-        await oferta.save();
-        res.status(200).json({ mensaje: 'Oferta desactivada exitosamente.', oferta });
-    } catch (error) {
-        if (error.name === 'CastError') {
-            return res.status(400).json({ mensaje: 'ID de oferta inválido.', detalle: error.message });
-        }
-        console.error('Error al desactivar oferta:', error);
-        res.status(500).json({ mensaje: 'Error interno del servidor al desactivar oferta.', error: error.message });
+  try {
+    const oferta = await Oferta.findByIdAndUpdate(
+      req.params.id,
+      { activa: false },
+      { new: true }
+    );
+
+    if (!oferta) {
+      return res.status(404).json({ mensaje: 'Oferta no encontrada.' });
     }
+
+    res.status(200).json({
+      mensaje: 'Oferta desactivada exitosamente.',
+      oferta: oferta
+    });
+  } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ mensaje: 'ID de oferta inválido.', detalle: error.message });
+    }
+    console.error('Error al desactivar la oferta:', error);
+    res.status(500).json({
+      mensaje: 'Error interno del servidor al desactivar la oferta.',
+      error: error.message
+    });
+  }
 };
 
 /**
  * @route GET /api/ofertas/producto/:productId
- * @desc Obtiene todas las ofertas vigentes aplicables a un producto específico.
+ * @desc Obtiene ofertas aplicables a un producto específico
  * @access Público
  */
 exports.obtenerOfertasPorProducto = async (req, res) => {
   try {
     const { productId } = req.params;
+    
+    // Buscar ofertas que apliquen directamente al producto
+    const ofertasDirectas = await Oferta.find({
+      tipoOferta: 'producto',
+      productosAplicables: productId,
+      activa: true
+    }).populate('productosAplicables', 'nombre precio imagen');
 
-    // Primero, encontrar el producto para obtener su categoría
-    const producto = await Producto.findById(productId).select('categoriaId');
+    // Buscar ofertas que apliquen a la categoría del producto
+    const producto = await Producto.findById(productId);
     if (!producto) {
       return res.status(404).json({ mensaje: 'Producto no encontrado.' });
     }
 
-    const ahora = new Date();
-    // Buscar ofertas que cumplan:
-    // 1. Estén activas
-    // 2. Sean vigentes (fechaInicio <= ahora <= fechaFin)
-    // 3. Apliquen al producto específico O a la categoría del producto
-    const ofertasAplicables = await Oferta.find({
-      activa: true,
-      fechaInicio: { $lte: ahora },
-      fechaFin: { $gte: ahora },
-      $or: [
-        { productosAplicables: productId },
-        { categoriasAplicables: producto.categoriaId }
-      ]
-    }).populate('productosAplicables', 'nombre').populate('categoriasAplicables', 'nombre');
+    const ofertasCategoria = await Oferta.find({
+      tipoOferta: 'categoria',
+      categoriasAplicables: producto.categoria,
+      activa: true
+    }).populate('categoriasAplicables', 'nombre');
 
-    res.status(200).json({
-      mensaje: `Ofertas vigentes para el producto "${productId}".`,
-      ofertas: ofertasAplicables
-    });
+    // Filtrar solo ofertas vigentes
+    const ofertasVigentes = [...ofertasDirectas, ...ofertasCategoria].filter(oferta => oferta.estaVigente());
+
+    res.status(200).json(ofertasVigentes);
   } catch (error) {
     if (error.name === 'CastError') {
       return res.status(400).json({ mensaje: 'ID de producto inválido.', detalle: error.message });

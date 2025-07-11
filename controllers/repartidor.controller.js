@@ -164,6 +164,90 @@ exports.updateRepartidor = async (req, res) => {
 };
 
 /**
+ * @desc Actualizar perfil completo del repartidor (usuario + repartidor)
+ * @route PUT /api/repartidores/:id/profile
+ * @access Repartidor (para su propio perfil)
+ * @body {string} [username] - Username del usuario
+ * @body {string} [email] - Email del usuario
+ * @body {string} [telefono] - Teléfono del usuario
+ * @body {string} [nombre] - Nombre del usuario
+ * @body {string} [apellido] - Apellido del usuario
+ * @body {string} [vehiculo] - Vehículo del repartidor
+ * @body {string} [numeroLicencia] - Número de licencia del repartidor
+ * @body {string} [estado] - Estado del repartidor
+ */
+exports.updateRepartidorProfile = async (req, res) => {
+    try {
+        const {
+            username, email, telefono, nombre, apellido,
+            vehiculo, numeroLicencia, estado
+        } = req.body;
+
+        // Buscar el repartidor con el usuario poblado
+        const repartidor = await Repartidor.findById(req.params.id).populate({
+            path: 'usuarioId',
+            select: 'username email nombre apellido telefono rolId',
+            populate: {
+                path: 'rolId',
+                select: 'nombre'
+            }
+        });
+
+        if (!repartidor) {
+            return res.status(404).json({ mensaje: 'Repartidor no encontrado.' });
+        }
+
+        // Verificar que el usuario autenticado sea el propietario del perfil
+        if (req.user && req.user.rol === 'repartidor' && repartidor.usuarioId._id.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para actualizar este perfil.' });
+        }
+
+        // Actualizar datos del usuario si se proporcionan
+        const usuario = repartidor.usuarioId;
+        if (username) usuario.username = username;
+        if (email) usuario.email = email;
+        if (telefono) usuario.telefono = telefono;
+        if (nombre) usuario.nombre = nombre;
+        if (apellido) usuario.apellido = apellido;
+
+        // Guardar cambios del usuario
+        await usuario.save();
+
+        // Actualizar datos del repartidor si se proporcionan
+        if (vehiculo !== undefined) repartidor.vehiculo = vehiculo;
+        if (numeroLicencia !== undefined) repartidor.numeroLicencia = numeroLicencia;
+        if (estado) repartidor.estado = estado;
+
+        // Guardar cambios del repartidor
+        await repartidor.save();
+
+        // Recargar el repartidor con datos actualizados
+        const repartidorActualizado = await Repartidor.findById(req.params.id).populate({
+            path: 'usuarioId',
+            select: 'username email nombre apellido telefono rolId',
+            populate: {
+                path: 'rolId',
+                select: 'nombre'
+            }
+        });
+
+        res.status(200).json({
+            mensaje: 'Perfil actualizado exitosamente',
+            repartidor: repartidorActualizado
+        });
+    } catch (error) {
+        console.error('Error al actualizar perfil del repartidor:', error);
+        if (error.name === 'CastError') {
+            return res.status(400).json({ mensaje: 'ID de repartidor inválido.' });
+        }
+        if (error.code === 11000) {
+            return res.status(400).json({ mensaje: 'El username o email ya está en uso.' });
+        }
+        res.status(500).json({ mensaje: 'Error interno del servidor al actualizar el perfil.', error: error.message });
+    }
+};
+
+/**
  * @desc Eliminar un repartidor por ID
  * @route DELETE /api/repartidores/:id
  * @access Admin

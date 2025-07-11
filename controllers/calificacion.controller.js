@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Calificacion = require('../models/Calificacion');
 const Pedido = require('../models/pedido'); // Para verificar que el pedido existe y ya fue entregado
 const Cliente = require('../models/cliente.model'); // Para verificar que el cliente existe y obtener el clienteId
@@ -30,7 +31,7 @@ exports.crearCalificacion = async (req, res) => {
       return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado.' });
     }
     const clienteId = cliente._id;
-    
+
     console.log('DEBUG - Usuario ID del token:', usuarioId);
     console.log('DEBUG - Cliente encontrado:', cliente._id);
     console.log('DEBUG - Cliente ID:', clienteId);
@@ -43,41 +44,39 @@ exports.crearCalificacion = async (req, res) => {
     if (pedido.estado !== 'entregado') {
       return res.status(400).json({ mensaje: 'Solo se pueden calificar pedidos que ya han sido entregados.' });
     }
+    
     // Asegurarse de que el cliente de la calificación sea el mismo que el del pedido
     console.log('DEBUG - Pedido Cliente ID:', pedido.clienteId.toString());
     console.log('DEBUG - Cliente ID del token:', clienteId.toString());
     console.log('DEBUG - Comparación:', pedido.clienteId.toString() === clienteId.toString());
-    
+
     if (pedido.clienteId.toString() !== clienteId.toString()) {
-        return res.status(403).json({ mensaje: 'No tiene permiso para calificar este pedido.' });
+      return res.status(403).json({ mensaje: 'No tiene permiso para calificar este pedido.' });
     }
 
-    // 2. Verificar que el cliente exista (ya verificado anteriormente)
-    // El cliente ya fue encontrado y verificado en el paso anterior
-
-    // 3. Verificar si ya existe una calificación para este pedido
+    // 2. Verificar si ya existe una calificación para este pedido
     const calificacionExistente = await Calificacion.findOne({ pedidoId });
     if (calificacionExistente) {
       return res.status(409).json({ mensaje: 'Este pedido ya ha sido calificado.' });
     }
 
-    // 4. Validar que los productos calificados pertenecen a este pedido
+    // 3. Validar que los productos calificados pertenecen a este pedido
     if (calificacionProductos && calificacionProductos.length > 0) {
-        const pedidoProductIds = pedido.detalleProductos.map(item => item.productoId.toString());
-        for (const prodCal of calificacionProductos) {
-            if (!pedidoProductIds.includes(prodCal.productoId.toString())) {
-                return res.status(400).json({ mensaje: `El producto con ID ${prodCal.productoId} no es parte de este pedido.` });
-            }
-            // Opcional: Obtener el nombre del producto para guardarlo en la calificación
-            const producto = await Producto.findById(prodCal.productoId);
-            if (producto) {
-                prodCal.nombreProducto = producto.nombre;
-            } else {
-                // Si el producto original no se encuentra, usar el del pedido o dar error
-                const itemEnPedido = pedido.detalleProductos.find(item => item.productoId.toString() === prodCal.productoId.toString());
-                prodCal.nombreProducto = itemEnPedido ? itemEnPedido.nombreProducto : 'Producto Desconocido';
-            }
+      const pedidoProductIds = pedido.detalleProductos.map(item => item.productoId.toString());
+      for (const prodCal of calificacionProductos) {
+        if (!pedidoProductIds.includes(prodCal.productoId.toString())) {
+          return res.status(400).json({ mensaje: `El producto con ID ${prodCal.productoId} no es parte de este pedido.` });
         }
+        // Opcional: Obtener el nombre del producto para guardarlo en la calificación
+        const producto = await Producto.findById(prodCal.productoId);
+        if (producto) {
+          prodCal.nombreProducto = producto.nombre;
+        } else {
+          // Si el producto original no se encuentra, usar el del pedido o dar error
+          const itemEnPedido = pedido.detalleProductos.find(item => item.productoId.toString() === prodCal.productoId.toString());
+          prodCal.nombreProducto = itemEnPedido ? itemEnPedido.nombreProducto : 'Producto Desconocido';
+        }
+      }
     }
 
     const nuevaCalificacion = new Calificacion({
@@ -128,20 +127,26 @@ exports.crearCalificacion = async (req, res) => {
 
 exports.obtenerCalificaciones = async (req, res) => {
   try {
-    // Obtener el usuarioId del token JWT
-    const usuarioId = req.usuario._id;
+    let calificaciones;
     
-    // Buscar el cliente asociado a este usuario
-    const cliente = await Cliente.findOne({ usuarioId: usuarioId });
-    if (!cliente) {
-      return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado.' });
+    // Si es admin, obtener todas las calificaciones
+    if (req.usuario.rol === 'admin') {
+      calificaciones = await Calificacion.find()
+        .populate('pedidoId', 'fechaPedido estado _id')
+        .populate('clienteId', 'nombre apellido email')
+        .sort({ fechaCalificacion: -1 });
+    } else {
+      // Si es cliente, obtener solo sus calificaciones
+      const cliente = await Cliente.findOne({ usuarioId: req.usuario._id });
+      if (!cliente) {
+        return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado.' });
+      }
+
+      calificaciones = await Calificacion.find({ clienteId: cliente._id })
+        .populate('pedidoId', 'fechaPedido estado _id')
+        .sort({ fechaCalificacion: -1 });
     }
-    
-    // Obtener solo las calificaciones del cliente autenticado
-    const calificaciones = await Calificacion.find({ clienteId: cliente._id })
-      .populate('pedidoId', 'fechaPedido estado _id') // Incluir _id para que esté disponible
-      .sort({ fechaCalificacion: -1 }); // Ordenar por fecha más reciente
-    
+
     console.log('DEBUG - Calificaciones encontradas:', calificaciones.length);
     if (calificaciones.length > 0) {
       console.log('DEBUG - Primera calificación:', {
@@ -157,7 +162,7 @@ exports.obtenerCalificaciones = async (req, res) => {
         puntuacionEntrega: typeof calificaciones[0].puntuacionEntrega
       });
     }
-    
+
     res.status(200).json(calificaciones);
   } catch (error) {
     console.error('Error al obtener calificaciones:', error);
@@ -173,11 +178,23 @@ exports.obtenerCalificacionPorId = async (req, res) => {
     const calificacion = await Calificacion.findById(req.params.id)
       .populate('pedidoId', 'fechaPedido estado')
       .populate('clienteId', 'nombre apellido email');
+    
     if (!calificacion) {
       return res.status(404).json({
         mensaje: 'Calificación no encontrada'
       });
     }
+
+    // Verificar permisos si es cliente
+    if (req.usuario.rol === 'cliente') {
+      const cliente = await Cliente.findOne({ usuarioId: req.usuario._id });
+      if (!cliente || calificacion.clienteId.toString() !== cliente._id.toString()) {
+        return res.status(403).json({
+          mensaje: 'No tienes permisos para ver esta calificación'
+        });
+      }
+    }
+
     res.status(200).json(calificacion);
   } catch (error) {
     console.error('Error al obtener calificación por ID:', error);
@@ -192,7 +209,7 @@ exports.eliminarCalificacion = async (req, res) => {
   try {
     // Obtener el usuarioId del token JWT
     const usuarioId = req.usuario._id;
-    
+
     // Buscar el cliente asociado a este usuario
     const cliente = await Cliente.findOne({ usuarioId: usuarioId });
     if (!cliente) {
@@ -214,9 +231,9 @@ exports.eliminarCalificacion = async (req, res) => {
       });
     }
 
-    // Eliminar la calificación
-    await Calificacion.findByIdAndDelete(req.params.id);
-    
+    // Eliminar la calificación usando deleteOne en el documento
+    await calificacion.deleteOne();
+
     res.status(200).json({
       mensaje: 'Calificación eliminada exitosamente'
     });
@@ -234,9 +251,21 @@ exports.eliminarCalificacion = async (req, res) => {
 exports.getCalificacionesPorCliente = async (req, res) => {
   try {
     const { clienteId } = req.params;
+    
+    // Verificar permisos: solo admin puede ver calificaciones de otros clientes
+    if (req.usuario.rol === 'cliente') {
+      const cliente = await Cliente.findOne({ usuarioId: req.usuario._id });
+      if (!cliente || cliente._id.toString() !== clienteId) {
+        return res.status(403).json({
+          mensaje: 'No tienes permisos para ver las calificaciones de otro cliente'
+        });
+      }
+    }
+
     const calificaciones = await Calificacion.find({ clienteId })
       .populate('pedidoId', 'fechaPedido')
       .sort({ fechaCalificacion: -1 });
+    
     res.status(200).json(calificaciones);
   } catch (error) {
     console.error('Error al obtener calificaciones por cliente:', error);
@@ -250,17 +279,96 @@ exports.getCalificacionesPorCliente = async (req, res) => {
 exports.getCalificacionesPorPedido = async (req, res) => {
   try {
     const { pedidoId } = req.params;
+    
     const calificacion = await Calificacion.findOne({ pedidoId })
-      .populate('clienteId', 'nombre apellido')
-      .populate('pedidoId', 'fechaPedido');
+      .populate('pedidoId', 'fechaPedido estado')
+      .populate('clienteId', 'nombre apellido email');
+
     if (!calificacion) {
-      return res.status(404).json({ mensaje: 'No hay calificación para este pedido.' });
+      return res.status(404).json({ mensaje: 'No se encontró calificación para este pedido.' });
     }
+
+    // Verificar permisos si es cliente
+    if (req.usuario.rol === 'cliente') {
+      const cliente = await Cliente.findOne({ usuarioId: req.usuario._id });
+      if (!cliente || calificacion.clienteId.toString() !== cliente._id.toString()) {
+        return res.status(403).json({
+          mensaje: 'No tienes permisos para ver esta calificación'
+        });
+      }
+    }
+
     res.status(200).json(calificacion);
   } catch (error) {
     console.error('Error al obtener calificación por pedido:', error);
     res.status(500).json({
       mensaje: 'Error interno del servidor al obtener calificación por pedido',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc Obtiene las calificaciones de entrega para un repartidor específico
+ * @route GET /api/calificaciones/repartidor/:repartidorId
+ * @access Admin, Repartidor (para su propio perfil)
+ */
+exports.getCalificacionesPorRepartidor = async (req, res) => {
+  try {
+    const { repartidorId } = req.params;
+
+    // Verificar que el repartidor existe
+    const Repartidor = require('../models/Repartidor');
+    const repartidor = await Repartidor.findById(repartidorId);
+    if (!repartidor) {
+      return res.status(404).json({ mensaje: 'Repartidor no encontrado.' });
+    }
+
+    // Verificar autorización: solo admin o el propio repartidor puede ver sus calificaciones
+    if (req.usuario.rol === 'repartidor' && repartidor.usuarioId.toString() !== req.usuario._id.toString()) {
+      return res.status(403).json({ mensaje: 'No tienes permisos para ver las calificaciones de otro repartidor.' });
+    }
+
+    // Buscar todos los pedidos asignados a este repartidor
+    const pedidosRepartidor = await Pedido.find({
+      repartidorId: repartidorId,
+      estado: 'entregado' // Solo pedidos entregados
+    }).select('_id fechaPedido');
+
+    const pedidosIds = pedidosRepartidor.map(pedido => pedido._id);
+
+    // Buscar calificaciones para estos pedidos
+    const calificaciones = await Calificacion.find({
+      pedidoId: { $in: pedidosIds }
+    })
+      .populate('pedidoId', 'fechaPedido estado')
+      .populate('clienteId', 'nombre apellido')
+      .sort({ fechaCalificacion: -1 });
+
+    // Formatear la respuesta para incluir solo la calificación de entrega
+    const calificacionesFormateadas = calificaciones.map(cal => ({
+      _id: cal._id,
+      pedidoId: cal.pedidoId,
+      clienteId: cal.clienteId,
+      puntuacionEntrega: cal.puntuacionEntrega, // Solo la calificación de entrega
+      comentario: cal.comentario,
+      fechaCalificacion: cal.fechaCalificacion
+    }));
+
+    res.status(200).json({
+      repartidor: {
+        _id: repartidor._id,
+        calificacionPromedio: repartidor.calificacionPromedio,
+        totalEntregas: repartidor.historialEntregas.length
+      },
+      calificaciones: calificacionesFormateadas,
+      totalCalificaciones: calificacionesFormateadas.length
+    });
+
+  } catch (error) {
+    console.error('Error al obtener calificaciones por repartidor:', error);
+    res.status(500).json({
+      mensaje: 'Error interno del servidor al obtener calificaciones por repartidor',
       error: error.message
     });
   }

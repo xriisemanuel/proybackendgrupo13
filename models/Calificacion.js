@@ -93,60 +93,157 @@ calificacionSchema.methods.calcularPuntuacionPromedio = function() {
   return sum / count;
 };
 
-// Se puede añadir un hook para, por ejemplo, actualizar la puntuación promedio del producto
-// cada vez que un producto es calificado, pero eso sería más complejo y podría requerir
-// un servicio o función separada para desacoplar responsabilidades.
-// Por ahora, el cálculo del promedio es a nivel de instancia de la Calificación.
+// --- HOOK POST-SAVE PARA ACTUALIZAR CALIFICACIÓN DEL REPARTIDOR ---
+calificacionSchema.post('save', async function(doc) {
+  try {
+    // Importar modelos necesarios
+    const Pedido = require('./pedido');
+    const Repartidor = require('./Repartidor');
+    
+    // Buscar el pedido para obtener el repartidorId
+    const pedido = await Pedido.findById(doc.pedidoId);
+    if (!pedido || !pedido.repartidorId) {
+      console.log('No se encontró pedido o repartidor asociado para actualizar calificación');
+      return;
+    }
+    
+    // Buscar el repartidor
+    const repartidor = await Repartidor.findById(pedido.repartidorId);
+    if (!repartidor) {
+      console.log('No se encontró el repartidor para actualizar calificación');
+      return;
+    }
+    
+    // Buscar si ya existe una entrada en el historial para este pedido
+    const entregaExistente = repartidor.historialEntregas.find(
+      entrega => entrega.pedidoId && entrega.pedidoId.toString() === doc.pedidoId.toString()
+    );
+    
+    if (entregaExistente) {
+      // Actualizar la calificación existente
+      entregaExistente.calificacionCliente = doc.puntuacionEntrega;
+      entregaExistente.fechaEntrega = entregaExistente.fechaEntrega || doc.fechaCalificacion;
+    } else {
+      // Agregar nueva entrada al historial
+      repartidor.historialEntregas.push({
+        pedidoId: doc.pedidoId,
+        fechaEntrega: doc.fechaCalificacion,
+        calificacionCliente: doc.puntuacionEntrega
+      });
+    }
+    
+    // Recalcular calificación promedio
+    const calificacionesValidas = repartidor.historialEntregas
+      .filter(item => item.calificacionCliente !== undefined && item.calificacionCliente !== null)
+      .map(item => item.calificacionCliente);
+    
+    if (calificacionesValidas.length > 0) {
+      const sumaCalificaciones = calificacionesValidas.reduce((sum, current) => sum + current, 0);
+      repartidor.calificacionPromedio = sumaCalificaciones / calificacionesValidas.length;
+    } else {
+      repartidor.calificacionPromedio = 0;
+    }
+    
+    // Guardar el repartidor actualizado
+    await repartidor.save();
+    
+    console.log(`Calificación del repartidor ${repartidor._id} actualizada. Nueva calificación promedio: ${repartidor.calificacionPromedio}`);
+    
+  } catch (error) {
+    console.error('Error al actualizar calificación del repartidor:', error);
+    // No lanzar el error para no afectar la creación de la calificación
+  }
+});
+
+// Hook post-findOneAndUpdate para actualizar calificación cuando se modifica una calificación
+calificacionSchema.post('findOneAndUpdate', async function(doc) {
+  if (!doc) return; // Si no hay documento, no hacer nada
+  
+  try {
+    const Pedido = require('./pedido');
+    const Repartidor = require('./Repartidor');
+    
+    const pedido = await Pedido.findById(doc.pedidoId);
+    if (!pedido || !pedido.repartidorId) {
+      return;
+    }
+    
+    const repartidor = await Repartidor.findById(pedido.repartidorId);
+    if (!repartidor) {
+      return;
+    }
+    
+    // Buscar la entrada en el historial
+    const entregaExistente = repartidor.historialEntregas.find(
+      entrega => entrega.pedidoId && entrega.pedidoId.toString() === doc.pedidoId.toString()
+    );
+    
+    if (entregaExistente) {
+      // Actualizar la calificación existente
+      entregaExistente.calificacionCliente = doc.puntuacionEntrega;
+    }
+    
+    // Recalcular calificación promedio
+    const calificacionesValidas = repartidor.historialEntregas
+      .filter(item => item.calificacionCliente !== undefined && item.calificacionCliente !== null)
+      .map(item => item.calificacionCliente);
+    
+    if (calificacionesValidas.length > 0) {
+      const sumaCalificaciones = calificacionesValidas.reduce((sum, current) => sum + current, 0);
+      repartidor.calificacionPromedio = sumaCalificaciones / calificacionesValidas.length;
+    } else {
+      repartidor.calificacionPromedio = 0;
+    }
+    
+    await repartidor.save();
+    console.log(`Calificación del repartidor ${repartidor._id} actualizada después de modificar calificación. Nueva calificación promedio: ${repartidor.calificacionPromedio}`);
+    
+  } catch (error) {
+    console.error('Error al actualizar calificación del repartidor después de modificar:', error);
+  }
+});
+
+// Hook post-deleteOne para actualizar calificación cuando se elimina una calificación
+calificacionSchema.post('deleteOne', { document: true, query: false }, async function(doc) {
+  try {
+    const Pedido = require('./pedido');
+    const Repartidor = require('./Repartidor');
+    
+    const pedido = await Pedido.findById(doc.pedidoId);
+    if (!pedido || !pedido.repartidorId) {
+      return;
+    }
+    
+    const repartidor = await Repartidor.findById(pedido.repartidorId);
+    if (!repartidor) {
+      return;
+    }
+    
+    // Remover la entrada del historial
+    repartidor.historialEntregas = repartidor.historialEntregas.filter(
+      entrega => entrega.pedidoId && entrega.pedidoId.toString() !== doc.pedidoId.toString()
+    );
+    
+    // Recalcular calificación promedio
+    const calificacionesValidas = repartidor.historialEntregas
+      .filter(item => item.calificacionCliente !== undefined && item.calificacionCliente !== null)
+      .map(item => item.calificacionCliente);
+    
+    if (calificacionesValidas.length > 0) {
+      const sumaCalificaciones = calificacionesValidas.reduce((sum, current) => sum + current, 0);
+      repartidor.calificacionPromedio = sumaCalificaciones / calificacionesValidas.length;
+    } else {
+      repartidor.calificacionPromedio = 0;
+    }
+    
+    await repartidor.save();
+    console.log(`Calificación del repartidor ${repartidor._id} actualizada después de eliminar calificación. Nueva calificación promedio: ${repartidor.calificacionPromedio}`);
+    
+  } catch (error) {
+    console.error('Error al actualizar calificación del repartidor después de eliminar:', error);
+  }
+});
 
 const Calificacion = mongoose.model('Calificacion', calificacionSchema);
 
 module.exports = Calificacion;
-
-// const mongoose = require('mongoose');
-
-// const CalificacionSchema = new mongoose.Schema({
-//   pedidoId: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: 'Pedido',
-//     required: true
-//   },
-//   clienteId: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: 'Cliente',
-//     required: true
-//   },
-//   puntuacionComida: {
-//     type: Number,
-//     required: true,
-//     min: 1,
-//     max: 5
-//   },
-//   puntuacionServicio: {
-//     type: Number,
-//     required: false,
-//     min: 1,
-//     max: 5
-//   },
-//   puntuacionEntrega: {
-//     type: Number,
-//     required: false,
-//     min: 1,
-//     max: 5
-//   },
-//   comentario: {
-//     type: String,
-//     maxlength: 300
-//   },
-//   calificacionProductos: [
-//     {
-//       productoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Producto' },
-//       puntaje: { type: Number, min: 1, max: 5 }
-//     }
-//   ],
-//   fechaCalificacion: {
-//     type: Date,
-//     default: Date.now
-//   }
-// });
-
-// module.exports = mongoose.model('Calificacion', CalificacionSchema);
