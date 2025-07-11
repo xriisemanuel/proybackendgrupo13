@@ -7,7 +7,10 @@ const detalleProductoSchema = new Schema({
   productoId: {
     type: Schema.Types.ObjectId,
     ref: 'Producto', // Referencia al modelo Producto
-    required: true,
+  },
+  comboId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Combo', // Referencia al modelo Combo
   },
   nombreProducto: { // Para mantener un registro si el nombre del producto cambia
     type: String,
