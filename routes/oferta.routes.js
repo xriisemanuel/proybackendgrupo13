@@ -1,18 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const ofertaController = require('../controllers/oferta.controller');
-// const authMiddleware = require('../middleware/auth'); // Opcional: para proteger rutas
+const { autenticar, autorizar } = require('../middleware/auth');
 
-// Rutas CRUD para Ofertas
-router.post('/', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ ofertaController.crearOferta);
-router.get('/', /*authMiddleware.autenticar,*/ ofertaController.obtenerOfertas);
-router.get('/:id', /*authMiddleware.autenticar,*/ ofertaController.obtenerOfertaPorId);
-router.put('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ ofertaController.editarOferta);
-router.delete('/:id', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ ofertaController.borrarOfertaPorId);
+// Rutas públicas (GET)
+router.get('/', ofertaController.obtenerOfertas);
+router.get('/:id', ofertaController.obtenerOfertaPorId);
+router.get('/producto/:productId', ofertaController.obtenerOfertasPorProducto);
 
-// Rutas de funcionalidades específicas
-router.patch('/:id/activar', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ ofertaController.activarOferta);
-router.patch('/:id/desactivar', /*authMiddleware.autenticar, authMiddleware.autorizar(['admin']),*/ ofertaController.desactivarOferta);
-router.get('/producto/:productId', /*authMiddleware.autenticar,*/ ofertaController.obtenerOfertasPorProducto); // Obtener ofertas para un producto específico
+// Rutas protegidas (POST, PUT, DELETE, PATCH)
+router.post('/', autenticar, autorizar(['admin', 'supervisor_ventas']), ofertaController.crearOferta);
+router.put('/:id', autenticar, autorizar(['admin', 'supervisor_ventas']), ofertaController.editarOferta);
+router.delete('/:id', autenticar, autorizar(['admin', 'supervisor_ventas']), ofertaController.borrarOfertaPorId);
+router.patch('/:id/activar', autenticar, autorizar(['admin', 'supervisor_ventas']), ofertaController.activarOferta);
+router.patch('/:id/desactivar', autenticar, autorizar(['admin', 'supervisor_ventas']), ofertaController.desactivarOferta);
 
 module.exports = router;

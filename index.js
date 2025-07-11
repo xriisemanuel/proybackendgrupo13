@@ -60,11 +60,11 @@ app.use('/api/categorias', categoriaRoutes); // <-- Eliminado autenticar y autor
 // La autenticación se manejará dentro de 'producto.route.js' para GET/POST/PUT/DELETE
 app.use('/api/productos', productoRoutes); // <-- Eliminado autenticar y autorizar aquí
 
-// Rutas de Gestión de Combos: Solo Administrador
-app.use('/api/combos', autenticar, autorizar(['admin']), comboRoutes);
+// Rutas de Gestión de Combos: GET público, resto protegido
+app.use('/api/combos', comboRoutes);
 
-// Rutas de Gestión de Ofertas: Solo Administrador y Supervisor de Ventas
-app.use('/api/ofertas', autenticar, autorizar(['admin', 'supervisor_ventas']), ofertaRoutes);
+// Rutas de Gestión de Ofertas: GET público, resto protegido
+app.use('/api/ofertas', ofertaRoutes);
 
 // Rutas de Repartidores: Acceso granular en controlador.
 app.use('/api/repartidores', autenticar, autorizar(['admin', 'repartidor', 'supervisor_ventas', 'supervisor_cocina']), repartidorRoutes);
