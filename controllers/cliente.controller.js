@@ -146,11 +146,27 @@ exports.getClienteById = async (req, res) => {
  * @body {Date} [fechaNacimiento]
  * @body {string[]} [preferenciasAlimentarias]
  * @body {number} [puntos]
+ * @body {string} [username] - Datos del usuario asociado
+ * @body {string} [email] - Datos del usuario asociado
+ * @body {string} [telefono] - Datos del usuario asociado
+ * @body {string} [nombre] - Datos del usuario asociado
+ * @body {string} [apellido] - Datos del usuario asociado
  */
 exports.updateCliente = async (req, res) => {
   console.log(`ClienteController: Intentando actualizar cliente con ID: ${req.params.id}`);
   try {
-    const { direccion, fechaNacimiento, preferenciasAlimentarias, puntos } = req.body;
+    const { 
+      direccion, 
+      fechaNacimiento, 
+      preferenciasAlimentarias, 
+      puntos,
+      username,
+      email,
+      telefono,
+      nombre,
+      apellido
+    } = req.body;
+    
     const cliente = await Cliente.findById(req.params.id).populate('usuarioId');
 
     if (!cliente) {
@@ -165,10 +181,27 @@ exports.updateCliente = async (req, res) => {
       return res.status(403).json({ mensaje: 'Acceso denegado. No tienes permiso para actualizar este perfil de cliente.' });
     }
 
-    if (direccion) cliente.direccion = direccion;
-    if (fechaNacimiento) cliente.fechaNacimiento = fechaNacimiento;
-    if (preferenciasAlimentarias) cliente.preferenciasAlimentarias = preferenciasAlimentarias;
+    // Actualizar datos del cliente
+    if (direccion !== undefined) cliente.direccion = direccion;
+    if (fechaNacimiento !== undefined) cliente.fechaNacimiento = fechaNacimiento;
+    if (preferenciasAlimentarias !== undefined) cliente.preferenciasAlimentarias = preferenciasAlimentarias;
     if (puntos !== undefined) cliente.puntos = puntos;
+
+    // Actualizar datos del usuario asociado
+    const usuarioId = cliente.usuarioId._id;
+    const updateUsuario = {};
+    
+    if (username !== undefined) updateUsuario.username = username;
+    if (email !== undefined) updateUsuario.email = email;
+    if (telefono !== undefined) updateUsuario.telefono = telefono;
+    if (nombre !== undefined) updateUsuario.nombre = nombre;
+    if (apellido !== undefined) updateUsuario.apellido = apellido;
+
+    // Si hay datos del usuario para actualizar, hacerlo
+    if (Object.keys(updateUsuario).length > 0) {
+      console.log('ClienteController: Actualizando datos del usuario:', updateUsuario);
+      await Usuario.findByIdAndUpdate(usuarioId, updateUsuario, { new: true });
+    }
 
     await cliente.save();
     console.log('ClienteController: Perfil de cliente actualizado exitosamente:', cliente);
@@ -182,7 +215,10 @@ exports.updateCliente = async (req, res) => {
       }
     });
 
-    res.status(200).json({ mensaje: 'Perfil de cliente actualizado exitosamente', cliente: clienteActualizado });
+    res.status(200).json({ 
+      mensaje: 'Perfil de cliente actualizado exitosamente', 
+      cliente: clienteActualizado 
+    });
   } catch (error) {
     console.error('ClienteController: Error al actualizar cliente:', error);
     if (error.name === 'CastError') {

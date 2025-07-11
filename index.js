@@ -1,5 +1,20 @@
 // proyecto/backend/index.js
 require('dotenv').config();
+
+// Cargar configuración
+let config;
+try {
+  config = require('./config.js');
+  console.log('Configuración cargada exitosamente');
+  console.log('Google Client ID:', config.GOOGLE_CLIENT_ID);
+} catch (error) {
+  console.warn('No se pudo cargar config.js, usando variables de entorno por defecto');
+  config = {
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || 'your-google-client-id',
+    JWT_SECRET: process.env.JWT_SECRET || '1234567890'
+  };
+}
+
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('./database'); // Asegúrate de que './database.js' maneje la conexión a MongoDB

@@ -10,4 +10,8 @@ router.post('/register', authController.registerUser);
 // Autentica las credenciales y devuelve un JWT.
 router.post('/login', authController.loginUser);
 
+// Rutas para Google OAuth
+router.post('/google', authController.googleLogin);
+router.get('/google/url', authController.getGoogleAuthUrl);
+
 module.exports = router;

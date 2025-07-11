@@ -14,7 +14,10 @@ const usuarioSchema = new Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: function() {
+      // La contraseña es requerida solo si no hay googleId (no es usuario OAuth)
+      return !this.googleId;
+    },
   },
   email: {
     type: String,
@@ -47,6 +50,12 @@ const usuarioSchema = new Schema({
   apellido: {
     type: String,
     required: true,
+    trim: true,
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true, // Permite valores nulos para unique
     trim: true,
   },
   clienteId: {
