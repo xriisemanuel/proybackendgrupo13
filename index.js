@@ -42,7 +42,26 @@ var app = express();
 
 // Middlewares globales
 app.use(express.json()); // Para parsear cuerpos de peticiones JSON
-app.use(cors({ origin: 'http://localhost:4200' })); // Configuración de CORS para permitir peticiones desde tu frontend
+
+// Configuración de CORS para permitir peticiones desde el frontend
+const allowedOrigins = [
+  'http://localhost:4200',
+  'https://tu-frontend-app.onrender.com', // Reemplaza con tu URL de frontend en Render
+  process.env.FRONTEND_URL // Variable de entorno para la URL del frontend
+].filter(Boolean);
+
+app.use(cors({ 
+  origin: function (origin, callback) {
+    // Permitir requests sin origin (como mobile apps o curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 
 // --- Rutas de Autenticación (Públicas) ---
 app.use('/api/auth', authRoutes);
@@ -91,8 +110,18 @@ app.use('/api/cliente', autenticar, autorizar(['admin', 'cliente']), clienteRout
 // Se mantiene la autenticación aquí para la generación de imágenes, ya que es una operación que modifica/consume recursos.
 //app.use('/api', imageGenerationRoutes); // Protege el router con autenticación.
 
+// Ruta de prueba para verificar que el servidor está funcionando
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    message: 'Backend funcionando correctamente',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Configuración del puerto y arranque del servidor
-app.set('port', process.env.PORT || 3000);
-app.listen(app.get('port'), () => {
-    console.log(`Servidor corriendo en el puerto ${app.get('port')}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Servidor corriendo en el puerto ${PORT}`);
+    console.log(`Entorno: ${process.env.NODE_ENV || 'development'}`);
 });
