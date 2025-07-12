@@ -36,7 +36,7 @@ const comboRoutes = require('./routes/combo.routes');
 const ofertaRoutes = require('./routes/oferta.routes');
 const repartidorRoutes = require('./routes/repartidor.routes');
 const clienteRoutes = require('./routes/cliente.routes');
-const imageGenerationRoutes = require('./routes/imageGeneration.routes'); // Importa el router de generación de imágenes
+//const imageGenerationRoutes = require('./routes/imageGeneration.routes.failed.js'); // Importa el router de generación de imágenes
 
 var app = express();
 
@@ -89,7 +89,7 @@ app.use('/api/cliente', autenticar, autorizar(['admin', 'cliente']), clienteRout
 
 // --- Rutas de Generación de Imágenes ---
 // Se mantiene la autenticación aquí para la generación de imágenes, ya que es una operación que modifica/consume recursos.
-app.use('/api', imageGenerationRoutes); // Protege el router con autenticación.
+//app.use('/api', imageGenerationRoutes); // Protege el router con autenticación.
 
 // Configuración del puerto y arranque del servidor
 app.set('port', process.env.PORT || 3000);
